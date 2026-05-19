@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>结算管理 - 食堂管理系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/common.css">
+</head>
+<body class="bg-gray-50">
+    <div class="flex h-screen">
+        <aside class="w-64 bg-white shadow-md"><div class="p-4 border-b"><h1 class="text-xl font-bold text-gray-800"><i class="fas fa-utensils mr-2 text-blue-600"></i>食堂管理系统</h1></div>
+        <nav class="p-2" id="sidebar-nav"></nav></aside>
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <header class="bg-white shadow-sm border-b"><div class="flex items-center justify-between p-4"><div class="flex items-center"><h2 class="text-lg font-semibold text-gray-800">结算管理</h2><span class="ml-4 text-sm text-gray-500">供应商结算单管理和审批</span></div><div class="flex items-center space-x-4"><div class="relative"><button class="flex items-center text-gray-700"><i class="fas fa-bell text-lg"></i><span class="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-4 h-4 flex items-center justify-center rounded-full" id="alert-count">0</span></button></div><div class="flex items-center space-x-2"><span class="text-sm font-medium" id="current-user">管理员</span></div></div></div></header>
+            <main class="flex-1 overflow-y-auto p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <div class="flex space-x-4">
+                        <input type="text" id="search-input" placeholder="搜索供应商名称/结算单号" class="pl-10 pr-4 py-2 border rounded-md w-80">
+                        <select id="status-filter" class="px-3 py-2 border rounded-md">
+                            <option value="">全部状态</option><option value="pending_approval">待审批</option><option value="approved">已审批</option><option value="paid">已付款</option><option value="cancelled">已取消</option>
+                        </select>
+                    </div>
+                    <button id="create-settlement-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"><i class="fas fa-plus mr-2"></i>生成结算单</button>
+                </div>
+                <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50"><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">结算单号</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">供应商</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">结算周期</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">采购总额</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">扣款</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">实付金额</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">状态</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th></tr></thead>
+                        <tbody class="bg-white divide-y divide-gray-200" id="settlement-list"></tbody>
+                    </table>
+                    <div class="px-6 py-4 border-t flex items-center justify-between"><div class="text-sm text-gray-500">共 <span id="total-count">0</span> 条</div><div class="flex space-x-2"><button id="prev-page" class="px-3 py-1 border rounded text-sm">上一页</button><span class="text-sm py-1" id="page-info">第1页</span><button id="next-page" class="px-3 py-1 border rounded text-sm">下一页</button></div></div>
+                </div>
+            </main>
+        </div>
+    </div>
+    <div id="common-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center"><div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"><div class="flex items-center justify-between p-6 border-b"><h3 class="text-lg font-semibold" id="modal-title"></h3><button onclick="closeModal()" class="text-gray-400 hover:text-gray-500"><i class="fas fa-times text-xl"></i></button></div><div class="p-6" id="modal-content"></div><div class="flex justify-end p-6 border-t space-x-3"><button onclick="closeModal()" class="px-4 py-2 border rounded text-gray-700">取消</button><button id="modal-confirm-btn" class="px-4 py-2 bg-blue-600 text-white rounded">确认</button></div></div></div>
+    <script src="js/common.js"></script>
+    <script src="js/settlement.js"></script>
+</body>
+</html>

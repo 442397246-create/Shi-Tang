@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>经营分析 - 食堂管理系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/common.css">
+</head>
+<body class="bg-gray-50">
+    <div class="flex h-screen">
+        <aside class="w-64 bg-white shadow-md"><div class="p-4 border-b"><h1 class="text-xl font-bold text-gray-800"><i class="fas fa-utensils mr-2 text-blue-600"></i>食堂管理系统</h1></div><nav class="p-2" id="sidebar-nav"></nav></aside>
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <header class="bg-white shadow-sm border-b"><div class="flex items-center justify-between p-4"><div class="flex items-center"><h2 class="text-lg font-semibold text-gray-800">经营分析</h2><span class="ml-4 text-sm text-gray-500">食堂运营数据分析和报表</span></div><div class="flex items-center space-x-4"><span class="text-sm font-medium" id="current-user">管理员</span></div></div></header>
+            <main class="flex-1 overflow-y-auto p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <div class="flex space-x-4 items-center">
+                        <select id="period-select" class="px-3 py-2 border rounded-md">
+                            <option value="7">近7天</option><option value="30">近30天</option><option value="90">近90天</option><option value="365">近1年</option>
+                        </select>
+                        <button id="refresh-btn" class="px-3 py-2 border rounded-md hover:bg-gray-50"><i class="fas fa-sync-alt mr-1"></i>刷新</button>
+                    </div>
+                    <button id="export-btn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md"><i class="fas fa-download mr-2"></i>导出报表</button>
+                </div>
+
+                <div class="grid grid-cols-4 gap-4 mb-6" id="stats-cards"></div>
+
+                <div class="grid grid-cols-2 gap-6 mb-6">
+                    <div class="bg-white rounded-lg shadow-sm p-6">
+                        <h3 class="text-sm font-semibold text-gray-700 mb-4">每日营业额趋势</h3>
+                        <canvas id="revenue-chart" height="220"></canvas>
+                    </div>
+                    <div class="bg-white rounded-lg shadow-sm p-6">
+                        <h3 class="text-sm font-semibold text-gray-700 mb-4">菜品分类销售占比</h3>
+                        <canvas id="category-chart" height="220"></canvas>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-6 mb-6">
+                    <div class="bg-white rounded-lg shadow-sm p-6">
+                        <h3 class="text-sm font-semibold text-gray-700 mb-4">热销菜品 TOP10</h3>
+                        <table class="min-w-full text-sm"><thead class="bg-gray-50"><tr><th class="px-4 py-2 text-left">排名</th><th class="px-4 py-2 text-left">菜品名称</th><th class="px-4 py-2 text-left">分类</th><th class="px-4 py-2 text-right">销量</th><th class="px-4 py-2 text-right">销售额</th></tr></thead><tbody id="top-dishes"></tbody></table>
+                    </div>
+                    <div class="bg-white rounded-lg shadow-sm p-6">
+                        <h3 class="text-sm font-semibold text-gray-700 mb-4">采购成本趋势</h3>
+                        <canvas id="cost-chart" height="220"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-4">供应商采购占比</h3>
+                    <div class="grid grid-cols-2 gap-6">
+                        <canvas id="supplier-chart" height="200"></canvas>
+                        <table class="min-w-full text-sm"><thead class="bg-gray-50"><tr><th class="px-4 py-2 text-left">供应商</th><th class="px-4 py-2 text-right">订单数</th><th class="px-4 py-2 text-right">总金额</th><th class="px-4 py-2 text-right">占比</th></tr></thead><tbody id="supplier-stats"></tbody></table>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+    <div id="common-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center"><div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"><div class="flex items-center justify-between p-6 border-b"><h3 class="text-lg font-semibold" id="modal-title"></h3><button onclick="closeModal()" class="text-gray-400 hover:text-gray-500"><i class="fas fa-times text-xl"></i></button></div><div class="p-6" id="modal-content"></div><div class="flex justify-end p-6 border-t space-x-3"><button onclick="closeModal()" class="px-4 py-2 border rounded text-gray-700">取消</button><button id="modal-confirm-btn" class="px-4 py-2 bg-blue-600 text-white rounded">确认</button></div></div></div>
+    <script src="js/common.js"></script>
+    <script src="js/report.js"></script>
+</body>
+</html>

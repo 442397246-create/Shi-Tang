@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统设置 - 食堂管理系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/common.css">
+</head>
+<body class="bg-gray-50">
+    <div class="flex h-screen">
+        <aside class="w-64 bg-white shadow-md"><div class="p-4 border-b"><h1 class="text-xl font-bold text-gray-800"><i class="fas fa-utensils mr-2 text-blue-600"></i>食堂管理系统</h1></div><nav class="p-2" id="sidebar-nav"></nav></aside>
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <header class="bg-white shadow-sm border-b"><div class="flex items-center justify-between p-4"><div class="flex items-center"><h2 class="text-lg font-semibold text-gray-800">系统设置</h2><span class="ml-4 text-sm text-gray-500">参数配置 | 用户管理 | 数据维护</span></div></div></header>
+            <main class="flex-1 overflow-y-auto p-6">
+                <div class="mb-6">
+                    <div class="flex border-b" id="settings-tabs">
+                        <button class="px-6 py-3 text-sm font-medium border-b-2 border-blue-600 text-blue-600 tab-btn" data-tab="general">基础设置</button>
+                        <button class="px-6 py-3 text-sm font-medium text-gray-500 hover:text-gray-700 tab-btn" data-tab="categories">分类配置</button>
+                        <button class="px-6 py-3 text-sm font-medium text-gray-500 hover:text-gray-700 tab-btn" data-tab="users">用户管理</button>
+                        <button class="px-6 py-3 text-sm font-medium text-gray-500 hover:text-gray-700 tab-btn" data-tab="data">数据维护</button>
+                    </div>
+                </div>
+
+                <!-- 基础设置 -->
+                <div id="tab-general" class="tab-content">
+                    <div class="bg-white rounded-lg shadow-sm p-6 max-w-2xl">
+                        <h3 class="text-base font-semibold mb-6">食堂基本参数</h3>
+                        <form id="general-form" class="space-y-4">
+                            <div class="grid grid-cols-2 gap-4">
+                                <div><label class="block text-sm text-gray-600 mb-1">食堂名称</label><input type="text" name="canteen_name" class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500"></div>
+                                <div><label class="block text-sm text-gray-600 mb-1">每餐餐标预警阈值(元)</label><input type="number" name="cost_alert_threshold" min="0" class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500"></div>
+                                <div><label class="block text-sm text-gray-600 mb-1">库存低位预警阈值(份)</label><input type="number" name="low_stock_threshold" min="0" value="100" class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500"></div>
+                                <div><label class="block text-sm text-gray-600 mb-1">临期预警天数</label><input type="number" name="expire_alert_days" min="1" value="7" class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500"></div>
+                                <div><label class="block text-sm text-gray-600 mb-1">数据保留天数</label><input type="number" name="data_retention_days" min="30" value="1095" class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500"></div>
+                                <div><label class="block text-sm text-gray-600 mb-1">自动备份时间</label><input type="time" name="auto_backup_time" value="02:00" class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500"></div>
+                            </div>
+                            <div class="pt-4">
+                                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md"><i class="fas fa-save mr-2"></i>保存设置</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- 分类配置 -->
+                <div id="tab-categories" class="tab-content hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="bg-white rounded-lg shadow-sm p-6">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-base font-semibold">食材分类</h3>
+                                <button onclick="addCategory('ingredient')" class="text-sm text-blue-600 hover:text-blue-800"><i class="fas fa-plus mr-1"></i>添加</button>
+                            </div>
+                            <div id="ingredient-category-list" class="space-y-2"></div>
+                        </div>
+                        <div class="bg-white rounded-lg shadow-sm p-6">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-base font-semibold">供应商分类</h3>
+                                <button onclick="addCategory('supplier')" class="text-sm text-blue-600 hover:text-blue-800"><i class="fas fa-plus mr-1"></i>添加</button>
+                            </div>
+                            <div id="supplier-category-list" class="space-y-2"></div>
+                        </div>
+                        <div class="bg-white rounded-lg shadow-sm p-6">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-base font-semibold">计量单位</h3>
+                                <button onclick="addCategory('unit')" class="text-sm text-blue-600 hover:text-blue-800"><i class="fas fa-plus mr-1"></i>添加</button>
+                            </div>
+                            <div id="unit-list" class="space-y-2"></div>
+                        </div>
+                    </div>
+                    <div class="mt-6 bg-blue-50 rounded-lg p-4">
+                        <h4 class="text-sm font-medium text-blue-800 mb-2"><i class="fas fa-info-circle mr-1"></i>说明</h4>
+                        <ul class="text-sm text-blue-700 space-y-1">
+                            <li>• 食材分类：用于食材库中的分类筛选和标识</li>
+                            <li>• 供应商分类：用于标识供应商的经营品类，关联食材时按分类匹配</li>
+                            <li>• 计量单位：食材库中可选择的计量单位列表</li>
+                            <li>• 删除分类前请确保没有食材/供应商正在使用该分类</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 用户管理 -->
+                <div id="tab-users" class="tab-content hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <div class="text-sm text-gray-500">管理系统用户账号和角色权限</div>
+                        <button id="add-user-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"><i class="fas fa-plus mr-2"></i>新增用户</button>
+                    </div>
+                    <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50"><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">用户ID</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">姓名</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">用户名</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">角色</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">电话</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">状态</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th></tr></thead>
+                            <tbody class="bg-white divide-y divide-gray-200" id="user-list"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 数据维护 -->
+                <div id="tab-data" class="tab-content hidden">
+                    <div class="grid grid-cols-2 gap-6">
+                        <div class="bg-white rounded-lg shadow-sm p-6">
+                            <h3 class="text-base font-semibold mb-4">数据备份</h3>
+                            <p class="text-sm text-gray-500 mb-4">将所有数据导出为文件备份</p>
+                            <button id="backup-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"><i class="fas fa-download mr-2"></i>备份数据</button>
+                        </div>
+                        <div class="bg-white rounded-lg shadow-sm p-6">
+                            <h3 class="text-base font-semibold mb-4">数据恢复</h3>
+                            <p class="text-sm text-gray-500 mb-4">从备份文件恢复数据</p>
+                            <input type="file" id="restore-file" accept=".json" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mb-3">
+                            <button id="restore-btn" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md cursor-not-allowed" disabled><i class="fas fa-upload mr-2"></i>恢复数据</button>
+                        </div>
+                        <div class="bg-white rounded-lg shadow-sm p-6">
+                            <h3 class="text-base font-semibold mb-4">初始化演示数据</h3>
+                            <p class="text-sm text-gray-500 mb-4">重新生成所有演示数据（会覆盖当前数据）</p>
+                            <button id="init-demo-btn" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-md"><i class="fas fa-sync-alt mr-2"></i>初始化演示数据</button>
+                        </div>
+                        <div class="bg-white rounded-lg shadow-sm p-6 border border-red-200">
+                            <h3 class="text-base font-semibold text-red-600 mb-4">危险操作</h3>
+                            <p class="text-sm text-gray-500 mb-4">清除所有数据，此操作不可恢复</p>
+                            <button id="clear-all-btn" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md"><i class="fas fa-trash mr-2"></i>清除全部数据</button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div id="common-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center"><div class="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto"><div class="flex items-center justify-between p-6 border-b"><h3 class="text-lg font-semibold" id="modal-title"></h3><button onclick="closeModal()" class="text-gray-400 hover:text-gray-500"><i class="fas fa-times text-xl"></i></button></div><div class="p-6" id="modal-content"></div><div class="flex justify-end p-6 border-t space-x-3"><button onclick="closeModal()" class="px-4 py-2 border rounded text-gray-700">取消</button><button id="modal-confirm-btn" class="px-4 py-2 bg-blue-600 text-white rounded">确认</button></div></div></div>
+
+    <script src="js/common.js"></script>
+    <script src="js/settings.js"></script>
+</body>
+</html>

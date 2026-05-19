@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>菜谱管理 - 食堂管理系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/common.css">
+</head>
+<body class="bg-gray-50">
+    <div class="flex h-screen">
+        <aside class="w-64 bg-white shadow-md flex-shrink-0">
+            <div class="p-4 border-b"><h1 class="text-xl font-bold text-gray-800 flex items-center"><i class="fas fa-utensils mr-2 text-blue-600"></i>食堂管理系统</h1></div>
+            <nav class="p-2" id="sidebar-nav"></nav>
+        </aside>
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <header class="bg-white shadow-sm border-b flex-shrink-0">
+                <div class="flex items-center justify-between p-4">
+                    <div class="flex items-center"><h2 class="text-lg font-semibold text-gray-800">菜单管理</h2><span class="ml-4 text-sm text-gray-500">周菜单编排与菜品数据库</span></div>
+                    <div class="flex items-center space-x-4">
+                        <div class="relative"><i class="fas fa-bell text-xl text-gray-500"></i><span class="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-4 h-4 flex items-center justify-center rounded-full" id="alert-count">0</span></div>
+                        <span class="text-sm font-medium text-gray-700" id="current-user">管理员</span>
+                    </div>
+                </div>
+            </header>
+            <main class="flex-1 overflow-y-auto p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-2xl font-bold text-gray-900">菜谱管理</h1>
+                <div class="flex space-x-3">
+                    <button onclick="generateWeeklyMenu()" class="px-4 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700">
+                        <i class="fas fa-magic mr-2"></i> 智能生成周菜谱
+                    </button>
+                    <button onclick="addDish()" class="px-4 py-2 bg-green-600 text-white rounded-md text-sm hover:bg-green-700">
+                        <i class="fas fa-plus mr-2"></i> 新增菜品
+                    </button>
+                </div>
+            </div>
+
+            <div class="border-b border-gray-200 mb-6">
+                <nav class="-mb-px flex space-x-8">
+                    <button onclick="switchTab('weekly')" id="tab-weekly" class="border-blue-500 text-blue-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                        周菜谱管理
+                    </button>
+                    <button onclick="switchTab('dish')" id="tab-dish" class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                        菜品数据库
+                    </button>
+                </nav>
+            </div>
+
+            <div id="content-weekly">
+                <div class="bg-white rounded-lg shadow-sm p-4 mb-6">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-4">
+                            <button onclick="previousWeek()" class="px-3 py-2 border rounded-md text-sm text-gray-700 hover:bg-gray-50">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <h2 class="text-lg font-semibold" id="current-week-text">2026年5月第3周</h2>
+                            <button onclick="nextWeek()" class="px-3 py-2 border rounded-md text-sm text-gray-700 hover:bg-gray-50">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                        <div class="flex space-x-3">
+                            <button onclick="copyPreviousWeekMenu()" class="px-4 py-2 border rounded-md text-sm text-gray-700 hover:bg-gray-50">
+                                <i class="fas fa-copy mr-2"></i> 同步菜谱
+                            </button>
+                            <button onclick="publishWeekMenu()" class="px-4 py-2 bg-green-600 text-white rounded-md text-sm hover:bg-green-700">
+                                <i class="fas fa-check mr-2"></i> 发布本周菜谱
+                            </button>
+                            <button onclick="batchGeneratePurchase()" id="batch-purchase-btn" class="px-4 py-2 bg-gray-300 text-gray-500 rounded-md text-sm cursor-not-allowed" disabled>
+                                <i class="fas fa-shopping-cart mr-2"></i> 批量生成采购单
+                            </button>
+                            <button onclick="batchDeleteMenu()" id="batch-delete-btn" class="px-4 py-2 bg-gray-300 text-gray-500 rounded-md text-sm cursor-not-allowed" disabled>
+                                <i class="fas fa-trash mr-2"></i> 批量删除
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-sm overflow-hidden mb-6">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase"><input type="checkbox" id="select-all-menu" class="rounded text-blue-600" onchange="toggleSelectAll(this)"></th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">星期</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">日期</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">早餐</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">午餐</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">晚餐</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">就餐人数</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">预计采购金额</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">状态</th>
+                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="weekly-menu-table">
+                                <tr>
+                                    <td colspan="9" class="text-center py-8 text-gray-500">
+                                        <i class="fas fa-spinner fa-spin mr-2"></i> 加载中...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="content-dish" class="hidden">
+                <div class="bg-white rounded-lg shadow-sm p-4 mb-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm text-gray-600 mb-1">菜品名称</label>
+                            <input type="text" id="dish-search" class="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500" placeholder="搜索菜品名称" oninput="searchDishes()">
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-600 mb-1">菜品分类</label>
+                            <select id="dish-category" class="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500" onchange="searchDishes()">
+                                <option value="">全部</option>
+                                <option value="大荤">大荤</option>
+                                <option value="小荤">小荤</option>
+                                <option value="素菜">素菜</option>
+                                <option value="汤品">汤品</option>
+                                <option value="主食">主食</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-600 mb-1">状态</label>
+                            <select id="dish-status" class="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500" onchange="searchDishes()">
+                                <option value="">全部</option>
+                                <option value="enabled">启用</option>
+                                <option value="disabled">禁用</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">菜品ID</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">菜品名称</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">分类</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">售价</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">烹饪时长</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">单人分量</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">食材配方</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">累计销量</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">剩菜率</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">状态</th>
+                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dish-table">
+                                <tr>
+                                    <td colspan="11" class="text-center py-8 text-gray-500">
+                                        <i class="fas fa-spinner fa-spin mr-2"></i> 加载中...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+        </div>
+    </div>
+
+    <div id="common-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between p-6 border-b"><h3 class="text-lg font-semibold" id="modal-title"></h3><button onclick="closeModal()" class="text-gray-400 hover:text-gray-500"><i class="fas fa-times text-xl"></i></button></div>
+            <div class="p-6" id="modal-content"></div>
+            <div class="flex justify-end p-6 border-t space-x-3"><button onclick="closeModal()" class="px-4 py-2 border rounded text-gray-700">取消</button><button id="modal-confirm-btn" class="px-4 py-2 bg-blue-600 text-white rounded">确认</button></div>
+        </div>
+    </div>
+
+    <script src="js/common.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSidebar('menu.html');
+        });
+    </script>
+    <script src="js/menu.js"></script>
+</body>
+</html>
