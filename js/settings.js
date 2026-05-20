@@ -1,8 +1,8 @@
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     loadSidebar('settings.html');
-    loadSettings();
-    loadCategoryList();
-    loadUserList();
+    await loadSettings();
+    await loadCategoryList();
+    await loadUserList();
     bindEvents();
 });
 
@@ -18,13 +18,17 @@ function bindEvents() {
         });
     });
 
-    document.getElementById('general-form').addEventListener('submit', function(e) {
+    document.getElementById('general-form').addEventListener('submit', async function(e) {
         e.preventDefault();
         var fd = new FormData(this);
         var settings = {};
         fd.forEach(function(v, k) { settings[k] = k === 'cost_alert_threshold' || k === 'low_stock_threshold' || k === 'expire_alert_days' || k === 'data_retention_days' ? parseInt(v) : v; });
-        db.set('settings', settings);
-        utils.showMessage('设置保存成功');
+        try {
+            await db.set('settings', settings);
+            utils.showMessage('设置保存成功');
+        } catch(err) {
+            utils.showMessage('设置保存失败', 'error');
+        }
     });
 
     document.getElementById('add-user-btn').addEventListener('click', openAddUserModal);
@@ -86,8 +90,8 @@ function bindEvents() {
     });
 }
 
-function loadSettings() {
-    var settings = db.get('settings');
+async function loadSettings() {
+    var settings = await db.get('settings');
     var form = document.getElementById('general-form');
     form.querySelector('[name="canteen_name"]').value = settings.canteen_name || '';
     form.querySelector('[name="cost_alert_threshold"]').value = settings.cost_alert_threshold || 10;
@@ -97,8 +101,8 @@ function loadSettings() {
     form.querySelector('[name="auto_backup_time"]').value = settings.auto_backup_time || '02:00';
 }
 
-function loadUserList() {
-    var users = db.get('users');
+async function loadUserList() {
+    var users = await db.get('users');
     var tbody = document.getElementById('user-list');
     var roleMap = { admin: '管理员', chef: '厨师', purchase: '采购', finance: '财务' };
 
@@ -145,60 +149,86 @@ function getUserForm(user) {
 }
 
 function openAddUserModal() {
-    openModal('新增用户', getUserForm(null), function() {
-        var form = document.getElementById('user-form');
-        var fd = new FormData(form);
-        var username = fd.get('username');
-        if (db.get('users').some(function(u) { return u.username === username; })) {
-            utils.showMessage('用户名已存在', 'error'); return false;
+    openModal('新增用户', getUserForm(null), async function() {
+        try {
+            var form = document.getElementById('user-form');
+            var fd = new FormData(form);
+            var username = fd.get('username');
+            var users = await db.get('users');
+            if (users.some(function(u) { return u.username === username; })) {
+                utils.showMessage('用户名已存在', 'error'); return false;
+            }
+            await db.add('users', {
+                id: utils.generateId('USER'), name: fd.get('name'), username: username,
+                password: db.hashPassword(fd.get('password')), phone: fd.get('phone'),
+                role: fd.get('role'), status: fd.get('status')
+            });
+            utils.showMessage('用户新增成功');
+            await loadUserList();
+        } catch(err) {
+            utils.showMessage('操作失败', 'error');
         }
-        db.add('users', {
-            id: utils.generateId('USER'), name: fd.get('name'), username: username,
-            password: db.hashPassword(fd.get('password')), phone: fd.get('phone'),
-            role: fd.get('role'), status: fd.get('status')
-        });
-        utils.showMessage('用户新增成功');
-        loadUserList();
     });
 }
 
-function editUser(id) {
-    var user = db.get('users').find(function(u) { return u.id === id; });
-    if (!user) return;
-    openModal('编辑用户', getUserForm(user), function() {
-        var form = document.getElementById('user-form');
-        var fd = new FormData(form);
-        db.update('users', id, {
-            name: fd.get('name'), phone: fd.get('phone'),
-            role: fd.get('role'), status: fd.get('status')
+async function editUser(id) {
+    try {
+        var users = await db.get('users');
+        var user = users.find(function(u) { return u.id === id; });
+        if (!user) return;
+        openModal('编辑用户', getUserForm(user), async function() {
+            try {
+                var form = document.getElementById('user-form');
+                var fd = new FormData(form);
+                await db.update('users', id, {
+                    name: fd.get('name'), phone: fd.get('phone'),
+                    role: fd.get('role'), status: fd.get('status')
+                });
+                utils.showMessage('用户更新成功');
+                await loadUserList();
+            } catch(err) {
+                utils.showMessage('操作失败', 'error');
+            }
         });
-        utils.showMessage('用户更新成功');
-        loadUserList();
-    });
+    } catch(err) {
+        utils.showMessage('操作失败', 'error');
+    }
 }
 
 function resetPassword(id) {
-    openModal('重置密码', '<p>确定重置该用户密码为 123456 吗？</p>', function() {
-        db.update('users', id, { password: db.hashPassword('123456') });
-        utils.showMessage('密码已重置为 123456');
+    openModal('重置密码', '<p>确定重置该用户密码为 123456 吗？</p>', async function() {
+        try {
+            await db.update('users', id, { password: db.hashPassword('123456') });
+            utils.showMessage('密码已重置为 123456');
+        } catch(err) {
+            utils.showMessage('操作失败', 'error');
+        }
     });
 }
 
-function deleteUser(id) {
-    var users = db.get('users');
-    if (users.length <= 1) { utils.showMessage('至少保留一个用户', 'error'); return false; }
-    var user = users.find(function(u) { return u.id === id; });
-    if (!user) return false;
-    if (user.username === 'admin') { utils.showMessage('不能删除超级管理员', 'error'); return false; }
-    openModal('确认删除', '<p>确定删除用户 <strong>' + escapeHtml(user.name) + '</strong> 吗？</p>', function() {
-        db.delete('users', id);
-        utils.showMessage('用户已删除');
-        loadUserList();
-    });
+async function deleteUser(id) {
+    try {
+        var users = await db.get('users');
+        if (users.length <= 1) { utils.showMessage('至少保留一个用户', 'error'); return false; }
+        var user = users.find(function(u) { return u.id === id; });
+        if (!user) return false;
+        if (user.username === 'admin') { utils.showMessage('不能删除超级管理员', 'error'); return false; }
+        openModal('确认删除', '<p>确定删除用户 <strong>' + escapeHtml(user.name) + '</strong> 吗？</p>', async function() {
+            try {
+                await db.delete('users', id);
+                utils.showMessage('用户已删除');
+                await loadUserList();
+            } catch(err) {
+                utils.showMessage('操作失败', 'error');
+            }
+        });
+    } catch(err) {
+        utils.showMessage('操作失败', 'error');
+    }
 }
 
-function loadCategoryList() {
-    var settings = db.get('settings');
+async function loadCategoryList() {
+    var settings = await db.get('settings');
     var ingCats = settings.ingredient_categories || [];
     var supCats = settings.supplier_categories || [];
     var units = settings.units || [];
@@ -250,83 +280,110 @@ function loadCategoryList() {
 function addCategory(type) {
     var label = type === 'ingredient' ? '食材分类' : type === 'supplier' ? '供应商分类' : '计量单位';
     var content = '<form id="category-form"><div><label class="form-label">' + label + '名称</label><input type="text" name="name" class="form-input" required placeholder="请输入' + label + '名称"></div></form>';
-    openModal('添加' + label, content, function() {
-        var name = document.querySelector('#category-form [name="name"]').value.trim();
-        if (!name) { utils.showMessage('请输入名称', 'error'); return false; }
-        var settings = db.get('settings');
-        var key = type === 'ingredient' ? 'ingredient_categories' : type === 'supplier' ? 'supplier_categories' : 'units';
-        if (!settings[key]) settings[key] = [];
-        if (settings[key].indexOf(name) !== -1) { utils.showMessage('该' + label + '已存在', 'error'); return false; }
-        settings[key].push(name);
-        db.set('settings', settings);
-        utils.showMessage(label + '添加成功');
-        loadCategoryList();
-    });
-}
-
-function editCategory(type, index) {
-    var settings = db.get('settings');
-    var key = type === 'ingredient' ? 'ingredient_categories' : type === 'supplier' ? 'supplier_categories' : 'units';
-    var list = settings[key] || [];
-    var oldName = list[index];
-    var label = type === 'ingredient' ? '食材分类' : type === 'supplier' ? '供应商分类' : '计量单位';
-    var content = '<form id="category-form"><div><label class="form-label">' + label + '名称</label><input type="text" name="name" class="form-input" required value="' + escapeHtml(oldName) + '"></div></form>';
-    openModal('编辑' + label, content, function() {
-        var name = document.querySelector('#category-form [name="name"]').value.trim();
-        if (!name) { utils.showMessage('请输入名称', 'error'); return false; }
-        if (name !== oldName && list.indexOf(name) !== -1) { utils.showMessage('该' + label + '已存在', 'error'); return false; }
-        settings[key][index] = name;
-        db.set('settings', settings);
-        if (name !== oldName) {
-            updateCategoryReferences(type, oldName, name);
+    openModal('添加' + label, content, async function() {
+        try {
+            var name = document.querySelector('#category-form [name="name"]').value.trim();
+            if (!name) { utils.showMessage('请输入名称', 'error'); return false; }
+            var settings = await db.get('settings');
+            var key = type === 'ingredient' ? 'ingredient_categories' : type === 'supplier' ? 'supplier_categories' : 'units';
+            if (!settings[key]) settings[key] = [];
+            if (settings[key].indexOf(name) !== -1) { utils.showMessage('该' + label + '已存在', 'error'); return false; }
+            settings[key].push(name);
+            await db.set('settings', settings);
+            utils.showMessage(label + '添加成功');
+            await loadCategoryList();
+        } catch(err) {
+            utils.showMessage('操作失败', 'error');
         }
-        utils.showMessage(label + '更新成功');
-        loadCategoryList();
     });
 }
 
-function deleteCategory(type, index) {
-    var settings = db.get('settings');
-    var key = type === 'ingredient' ? 'ingredient_categories' : type === 'supplier' ? 'supplier_categories' : 'units';
-    var list = settings[key] || [];
-    var name = list[index];
-    var label = type === 'ingredient' ? '食材分类' : type === 'supplier' ? '供应商分类' : '计量单位';
-
-    if (type === 'ingredient') {
-        var usedCount = db.get('ingredients').filter(function(ing) { return ing.category === name; }).length;
-        if (usedCount > 0) { utils.showMessage('该分类被 ' + usedCount + ' 个食材使用，无法删除', 'error'); return false; }
-    } else if (type === 'supplier') {
-        var usedCount = db.get('suppliers').filter(function(s) { return s.category && s.category.indexOf(name) !== -1; }).length;
-        if (usedCount > 0) { utils.showMessage('该分类被 ' + usedCount + ' 个供应商使用，无法删除', 'error'); return false; }
-    } else if (type === 'unit') {
-        var usedCount = db.get('ingredients').filter(function(ing) { return ing.unit === name; }).length;
-        if (usedCount > 0) { utils.showMessage('该单位被 ' + usedCount + ' 个食材使用，无法删除', 'error'); return false; }
+async function editCategory(type, index) {
+    try {
+        var settings = await db.get('settings');
+        var key = type === 'ingredient' ? 'ingredient_categories' : type === 'supplier' ? 'supplier_categories' : 'units';
+        var list = settings[key] || [];
+        var oldName = list[index];
+        var label = type === 'ingredient' ? '食材分类' : type === 'supplier' ? '供应商分类' : '计量单位';
+        var content = '<form id="category-form"><div><label class="form-label">' + label + '名称</label><input type="text" name="name" class="form-input" required value="' + escapeHtml(oldName) + '"></div></form>';
+        openModal('编辑' + label, content, async function() {
+            try {
+                var name = document.querySelector('#category-form [name="name"]').value.trim();
+                if (!name) { utils.showMessage('请输入名称', 'error'); return false; }
+                if (name !== oldName && list.indexOf(name) !== -1) { utils.showMessage('该' + label + '已存在', 'error'); return false; }
+                settings[key][index] = name;
+                await db.set('settings', settings);
+                if (name !== oldName) {
+                    await updateCategoryReferences(type, oldName, name);
+                }
+                utils.showMessage(label + '更新成功');
+                await loadCategoryList();
+            } catch(err) {
+                utils.showMessage('操作失败', 'error');
+            }
+        });
+    } catch(err) {
+        utils.showMessage('操作失败', 'error');
     }
-
-    openModal('确认删除', '<p>确定删除' + label + ' <strong>' + escapeHtml(name) + '</strong> 吗？</p>', function() {
-        settings[key].splice(index, 1);
-        db.set('settings', settings);
-        utils.showMessage(label + '已删除');
-        loadCategoryList();
-    });
 }
 
-function moveCategory(type, index, direction) {
-    var settings = db.get('settings');
-    var key = type === 'ingredient' ? 'ingredient_categories' : type === 'supplier' ? 'supplier_categories' : 'units';
-    var list = settings[key] || [];
-    var newIndex = index + direction;
-    if (newIndex < 0 || newIndex >= list.length) return;
-    var temp = list[index];
-    list[index] = list[newIndex];
-    list[newIndex] = temp;
-    db.set('settings', settings);
-    loadCategoryList();
+async function deleteCategory(type, index) {
+    try {
+        var settings = await db.get('settings');
+        var key = type === 'ingredient' ? 'ingredient_categories' : type === 'supplier' ? 'supplier_categories' : 'units';
+        var list = settings[key] || [];
+        var name = list[index];
+        var label = type === 'ingredient' ? '食材分类' : type === 'supplier' ? '供应商分类' : '计量单位';
+
+        if (type === 'ingredient') {
+            var ingredients = await db.get('ingredients');
+            var usedCount = ingredients.filter(function(ing) { return ing.category === name; }).length;
+            if (usedCount > 0) { utils.showMessage('该分类被 ' + usedCount + ' 个食材使用，无法删除', 'error'); return false; }
+        } else if (type === 'supplier') {
+            var suppliers = await db.get('suppliers');
+            var usedCount = suppliers.filter(function(s) { return s.category && s.category.indexOf(name) !== -1; }).length;
+            if (usedCount > 0) { utils.showMessage('该分类被 ' + usedCount + ' 个供应商使用，无法删除', 'error'); return false; }
+        } else if (type === 'unit') {
+            var ingredients = await db.get('ingredients');
+            var usedCount = ingredients.filter(function(ing) { return ing.unit === name; }).length;
+            if (usedCount > 0) { utils.showMessage('该单位被 ' + usedCount + ' 个食材使用，无法删除', 'error'); return false; }
+        }
+
+        openModal('确认删除', '<p>确定删除' + label + ' <strong>' + escapeHtml(name) + '</strong> 吗？</p>', async function() {
+            try {
+                settings[key].splice(index, 1);
+                await db.set('settings', settings);
+                utils.showMessage(label + '已删除');
+                await loadCategoryList();
+            } catch(err) {
+                utils.showMessage('操作失败', 'error');
+            }
+        });
+    } catch(err) {
+        utils.showMessage('操作失败', 'error');
+    }
 }
 
-function updateCategoryReferences(type, oldName, newName) {
+async function moveCategory(type, index, direction) {
+    try {
+        var settings = await db.get('settings');
+        var key = type === 'ingredient' ? 'ingredient_categories' : type === 'supplier' ? 'supplier_categories' : 'units';
+        var list = settings[key] || [];
+        var newIndex = index + direction;
+        if (newIndex < 0 || newIndex >= list.length) return;
+        var temp = list[index];
+        list[index] = list[newIndex];
+        list[newIndex] = temp;
+        await db.set('settings', settings);
+        await loadCategoryList();
+    } catch(err) {
+        utils.showMessage('操作失败', 'error');
+    }
+}
+
+async function updateCategoryReferences(type, oldName, newName) {
     if (type === 'ingredient') {
-        var ingredients = db.get('ingredients');
+        var ingredients = await db.get('ingredients');
         var changed = false;
         ingredients.forEach(function(ing) {
             if (ing.category === oldName) {
@@ -334,9 +391,9 @@ function updateCategoryReferences(type, oldName, newName) {
                 changed = true;
             }
         });
-        if (changed) db.set('ingredients', ingredients);
+        if (changed) await db.set('ingredients', ingredients);
     } else if (type === 'supplier') {
-        var suppliers = db.get('suppliers');
+        var suppliers = await db.get('suppliers');
         var changed = false;
         suppliers.forEach(function(s) {
             if (s.category) {
@@ -347,9 +404,9 @@ function updateCategoryReferences(type, oldName, newName) {
                 }
             }
         });
-        if (changed) db.set('suppliers', suppliers);
+        if (changed) await db.set('suppliers', suppliers);
     } else if (type === 'unit') {
-        var ingredients = db.get('ingredients');
+        var ingredients = await db.get('ingredients');
         var changed = false;
         ingredients.forEach(function(ing) {
             if (ing.unit === oldName) {
@@ -357,6 +414,6 @@ function updateCategoryReferences(type, oldName, newName) {
                 changed = true;
             }
         });
-        if (changed) db.set('ingredients', ingredients);
+        if (changed) await db.set('ingredients', ingredients);
     }
 }

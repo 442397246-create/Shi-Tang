@@ -1,10 +1,10 @@
 let currentTab = 'ingredient';
 
-document.addEventListener('DOMContentLoaded', function() {
-    loadIngredientList();
-    loadInventoryStats();
-    loadInventoryList();
-    loadStockFlowList();
+document.addEventListener('DOMContentLoaded', async function() {
+    await loadIngredientList();
+    await loadInventoryStats();
+    await loadInventoryList();
+    await loadStockFlowList();
 });
 
 function switchTab(tab) {
@@ -32,10 +32,10 @@ function switchTab(tab) {
     }
 }
 
-function loadIngredientList() {
-    var ingredients = db.get('ingredients');
-    var suppliers = db.get('suppliers');
-    var settings = db.get('settings');
+async function loadIngredientList() {
+    var ingredients = await db.get('ingredients');
+    var suppliers = await db.get('suppliers');
+    var settings = await db.get('settings');
     var categories = settings.ingredient_categories || [];
     var keyword = (document.getElementById('search-ingredient-keyword')?.value || '').toLowerCase().trim();
     var category = document.getElementById('filter-ingredient-category')?.value || '';
@@ -102,11 +102,11 @@ function loadIngredientList() {
     }).join('');
 }
 
-function getIngredientForm(data) {
+async function getIngredientForm(data) {
     var isEdit = !!data;
     var d = data || {};
-    var suppliers = db.get('suppliers').filter(function(s) { return s.status === 'enabled'; });
-    var settings = db.get('settings');
+    var suppliers = (await db.get('suppliers')).filter(function(s) { return s.status === 'enabled'; });
+    var settings = await db.get('settings');
     var categories = settings.ingredient_categories || ['蔬菜', '肉类', '蛋类', '水产', '粮油', '辅料', '调料', '冷冻品', '其他'];
     var units = settings.units || ['kg', '斤', 'L', '个', '包', '箱', '瓶', '桶'];
     
@@ -138,82 +138,97 @@ function getIngredientForm(data) {
         '</form>';
 }
 
-function addIngredient() {
-    openModal('新增食材', getIngredientForm(null), function() {
-        var form = document.getElementById('ingredient-form');
-        var fd = new FormData(form);
-        var name = fd.get('name');
-        if (!name) { utils.showMessage('请输入食材名称', 'error'); return false; }
-        
-        var supplierIds = Array.from(form.querySelectorAll('input[name="supplier_ids"]:checked')).map(function(cb) { return cb.value; });
-        
-        db.add('ingredients', {
-            id: utils.generateId('ING'),
-            name: name,
-            category: fd.get('category'),
-            unit: fd.get('unit'),
-            price: parseFloat(fd.get('price')) || 0,
-            yield_rate: parseFloat(fd.get('yield_rate')) || 1,
-            stock: 0,
-            stock_low: parseFloat(fd.get('stock_low')) || 0,
-            stock_high: fd.get('stock_high') ? parseFloat(fd.get('stock_high')) : null,
-            supplier_ids: supplierIds,
-            status: fd.get('status')
+async function addIngredient() {
+    try {
+        openModal('新增食材', await getIngredientForm(null), async function() {
+            var form = document.getElementById('ingredient-form');
+            var fd = new FormData(form);
+            var name = fd.get('name');
+            if (!name) { utils.showMessage('请输入食材名称', 'error'); return false; }
+            
+            var supplierIds = Array.from(form.querySelectorAll('input[name="supplier_ids"]:checked')).map(function(cb) { return cb.value; });
+            
+            await db.add('ingredients', {
+                id: utils.generateId('ING'),
+                name: name,
+                category: fd.get('category'),
+                unit: fd.get('unit'),
+                price: parseFloat(fd.get('price')) || 0,
+                yield_rate: parseFloat(fd.get('yield_rate')) || 1,
+                stock: 0,
+                stock_low: parseFloat(fd.get('stock_low')) || 0,
+                stock_high: fd.get('stock_high') ? parseFloat(fd.get('stock_high')) : null,
+                supplier_ids: supplierIds,
+                status: fd.get('status')
+            });
+            
+            utils.showMessage('食材新增成功');
+            await loadIngredientList();
         });
-        
-        utils.showMessage('食材新增成功');
-        loadIngredientList();
-    });
-}
-
-function editIngredient(id) {
-    var ing = db.get('ingredients').find(function(i) { return i.id === id; });
-    if (!ing) return;
-    
-    openModal('编辑食材', getIngredientForm(ing), function() {
-        var form = document.getElementById('ingredient-form');
-        var fd = new FormData(form);
-        var name = fd.get('name');
-        if (!name) { utils.showMessage('请输入食材名称', 'error'); return false; }
-        
-        var supplierIds = Array.from(form.querySelectorAll('input[name="supplier_ids"]:checked')).map(function(cb) { return cb.value; });
-        
-        db.update('ingredients', id, {
-            name: name,
-            category: fd.get('category'),
-            unit: fd.get('unit'),
-            price: parseFloat(fd.get('price')) || 0,
-            yield_rate: parseFloat(fd.get('yield_rate')) || 1,
-            stock_low: parseFloat(fd.get('stock_low')) || 0,
-            stock_high: fd.get('stock_high') ? parseFloat(fd.get('stock_high')) : null,
-            supplier_ids: supplierIds,
-            status: fd.get('status')
-        });
-        
-        utils.showMessage('食材更新成功');
-        loadIngredientList();
-    });
-}
-
-function deleteIngredient(id, name) {
-    var dishes = db.get('dishes').filter(function(d) {
-        return d.ingredients && d.ingredients.some(function(i) { return i.ingredient_id === id; });
-    });
-    if (dishes.length > 0) {
-        utils.showMessage('该食材被 ' + dishes.length + ' 个菜品使用，无法删除', 'error');
-        return false;
+    } catch (e) {
+        console.error(e);
+        utils.showMessage('操作失败：' + e.message, 'error');
     }
-    openModal('确认删除', '<p>确定删除食材 <strong>' + escapeHtml(name) + '</strong> 吗？此操作不可恢复。</p>', function() {
-        db.delete('ingredients', id);
-        utils.showMessage('食材已删除');
-        loadIngredientList();
-        loadInventoryStats();
-        loadInventoryList();
-    });
 }
 
-function loadInventoryStats() {
-    const ingredients = db.get('ingredients');
+async function editIngredient(id) {
+    try {
+        var ing = (await db.get('ingredients')).find(function(i) { return i.id === id; });
+        if (!ing) return;
+        
+        openModal('编辑食材', await getIngredientForm(ing), async function() {
+            var form = document.getElementById('ingredient-form');
+            var fd = new FormData(form);
+            var name = fd.get('name');
+            if (!name) { utils.showMessage('请输入食材名称', 'error'); return false; }
+            
+            var supplierIds = Array.from(form.querySelectorAll('input[name="supplier_ids"]:checked')).map(function(cb) { return cb.value; });
+            
+            await db.update('ingredients', id, {
+                name: name,
+                category: fd.get('category'),
+                unit: fd.get('unit'),
+                price: parseFloat(fd.get('price')) || 0,
+                yield_rate: parseFloat(fd.get('yield_rate')) || 1,
+                stock_low: parseFloat(fd.get('stock_low')) || 0,
+                stock_high: fd.get('stock_high') ? parseFloat(fd.get('stock_high')) : null,
+                supplier_ids: supplierIds,
+                status: fd.get('status')
+            });
+            
+            utils.showMessage('食材更新成功');
+            await loadIngredientList();
+        });
+    } catch (e) {
+        console.error(e);
+        utils.showMessage('操作失败：' + e.message, 'error');
+    }
+}
+
+async function deleteIngredient(id, name) {
+    try {
+        var dishes = (await db.get('dishes')).filter(function(d) {
+            return d.ingredients && d.ingredients.some(function(i) { return i.ingredient_id === id; });
+        });
+        if (dishes.length > 0) {
+            utils.showMessage('该食材被 ' + dishes.length + ' 个菜品使用，无法删除', 'error');
+            return false;
+        }
+        openModal('确认删除', '<p>确定删除食材 <strong>' + escapeHtml(name) + '</strong> 吗？此操作不可恢复。</p>', async function() {
+            await db.delete('ingredients', id);
+            utils.showMessage('食材已删除');
+            await loadIngredientList();
+            await loadInventoryStats();
+            await loadInventoryList();
+        });
+    } catch (e) {
+        console.error(e);
+        utils.showMessage('操作失败：' + e.message, 'error');
+    }
+}
+
+async function loadInventoryStats() {
+    const ingredients = await db.get('ingredients');
     const now = new Date();
     
     const totalItems = ingredients.length;
@@ -236,12 +251,12 @@ function loadInventoryStats() {
     document.getElementById('stat-total-value').textContent = utils.formatMoney(totalValue);
 }
 
-function loadInventoryList() {
-    let ingredients = [...db.get('ingredients')];
+async function loadInventoryList() {
+    let ingredients = [...(await db.get('ingredients'))];
     const tableBody = document.getElementById('inventory-table');
     const now = new Date();
     
-    var settings = db.get('settings');
+    var settings = await db.get('settings');
     var categories = settings.ingredient_categories || [];
     var catSelect = document.getElementById('filter-category');
     if (catSelect && catSelect.options.length <= 1) {
@@ -415,8 +430,8 @@ function getCategoryClass(category) {
     return classMap[category] || 'bg-gray-100 text-gray-800';
 }
 
-function loadStockFlowList() {
-    let stockFlows = [...db.get('stock_flows')];
+async function loadStockFlowList() {
+    let stockFlows = [...(await db.get('stock_flows'))];
     const tableBody = document.getElementById('stock-flow-table');
     
     if (!tableBody) return;
@@ -515,128 +530,138 @@ function getFlowTypeInfo(type) {
     return typeMap[type] || { text: '未知', class: 'bg-gray-100 text-gray-800' };
 }
 
-function viewIngredientDetail(ingredientId) {
-    const ingredient = db.get('ingredients').find(ing => ing.id === ingredientId);
-    if (!ingredient) return;
-    
-    const status = getIngredientStatus(ingredient);
-    
-    const recentFlows = getRecentFlows(ingredient.id);
-    let flowsHtml = '';
-    if (recentFlows.length === 0) {
-        flowsHtml = '<tr><td colspan="5" class="px-3 py-4 text-center text-gray-400 text-xs">暂无记录</td></tr>';
-    } else {
-        recentFlows.forEach(flow => {
-            const typeInfo = getFlowTypeInfo(flow.type);
-            const time = utils.formatDateTime(flow.created_at);
-            flowsHtml += `
-                <tr>
-                    <td class="px-3 py-2 whitespace-nowrap text-xs text-gray-500">${escapeHtml(time)}</td>
-                    <td class="px-3 py-2 whitespace-nowrap"><span class="status-badge ${typeInfo.class} text-xs">${typeInfo.text}</span></td>
-                    <td class="px-3 py-2 whitespace-nowrap text-right text-xs font-medium ${flow.type === 'in' ? 'text-green-600' : 'text-red-600'}">${flow.type === 'in' ? '+' : '-'}${flow.quantity.toFixed(2)}</td>
-                    <td class="px-3 py-2 whitespace-nowrap text-right text-xs text-gray-900">${flow.after_stock.toFixed(2)}</td>
-                    <td class="px-3 py-2 whitespace-nowrap text-xs text-gray-500">${escapeHtml(flow.operator || '-')}</td>
-                </tr>
-            `;
-        });
-    }
-    
-    const content = `
-        <div class="space-y-6">
-            <div class="flex justify-between items-center">
-                <h3 class="text-lg font-medium text-gray-900">食材详情</h3>
-                <span class="status-badge ${status.class}">${status.text}</span>
-            </div>
-            
-            <div class="grid grid-cols-2 gap-4">
-                <div><p class="text-sm text-gray-500 mb-1">食材名称</p><p class="text-sm font-medium text-gray-900">${escapeHtml(ingredient.name)}</p></div>
-                <div><p class="text-sm text-gray-500 mb-1">食材分类</p><p class="text-sm font-medium text-gray-900">${escapeHtml(ingredient.category)}</p></div>
-                <div><p class="text-sm text-gray-500 mb-1">当前库存</p><p class="text-sm font-medium ${ingredient.stock <= ingredient.stock_low ? 'text-red-600' : 'text-gray-900'}">${ingredient.stock.toFixed(2)} ${escapeHtml(ingredient.unit)}</p></div>
-                <div><p class="text-sm text-gray-500 mb-1">库存下限</p><p class="text-sm font-medium text-gray-900">${ingredient.stock_low.toFixed(2)} ${escapeHtml(ingredient.unit)}</p></div>
-                <div><p class="text-sm text-gray-500 mb-1">库存上限</p><p class="text-sm font-medium text-gray-900">${ingredient.stock_high ? ingredient.stock_high.toFixed(2) + ' ' + escapeHtml(ingredient.unit) : '-'}</p></div>
-                <div><p class="text-sm text-gray-500 mb-1">采购单价</p><p class="text-sm font-medium text-gray-900">¥${ingredient.price.toFixed(2)}/${escapeHtml(ingredient.unit)}</p></div>
-                <div><p class="text-sm text-gray-500 mb-1">库存价值</p><p class="text-sm font-medium text-red-600">${utils.formatMoney(ingredient.stock * ingredient.price)}</p></div>
-                <div><p class="text-sm text-gray-500 mb-1">有效期</p><p class="text-sm font-medium text-gray-900">${ingredient.expire_date || '-'}</p></div>
-            </div>
-            
-            <div>
-                <h4 class="text-sm font-medium text-gray-900 mb-3">最近出入库记录</h4>
-                <div class="overflow-x-auto max-h-60 overflow-y-auto">
-                    <table class="min-w-full divide-y divide-gray-200 text-sm">
-                        <thead class="bg-gray-50 sticky top-0">
-                            <tr>
-                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">时间</th>
-                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">类型</th>
-                                <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">数量</th>
-                                <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">变动后库存</th>
-                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">操作人</th>
-                            </tr>
-                        </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">${flowsHtml}</tbody>
-                    </table>
+async function viewIngredientDetail(ingredientId) {
+    try {
+        const ingredient = (await db.get('ingredients')).find(ing => ing.id === ingredientId);
+        if (!ingredient) return;
+        
+        const status = getIngredientStatus(ingredient);
+        
+        const recentFlows = await getRecentFlows(ingredient.id);
+        let flowsHtml = '';
+        if (recentFlows.length === 0) {
+            flowsHtml = '<tr><td colspan="5" class="px-3 py-4 text-center text-gray-400 text-xs">暂无记录</td></tr>';
+        } else {
+            recentFlows.forEach(flow => {
+                const typeInfo = getFlowTypeInfo(flow.type);
+                const time = utils.formatDateTime(flow.created_at);
+                flowsHtml += `
+                    <tr>
+                        <td class="px-3 py-2 whitespace-nowrap text-xs text-gray-500">${escapeHtml(time)}</td>
+                        <td class="px-3 py-2 whitespace-nowrap"><span class="status-badge ${typeInfo.class} text-xs">${typeInfo.text}</span></td>
+                        <td class="px-3 py-2 whitespace-nowrap text-right text-xs font-medium ${flow.type === 'in' ? 'text-green-600' : 'text-red-600'}">${flow.type === 'in' ? '+' : '-'}${flow.quantity.toFixed(2)}</td>
+                        <td class="px-3 py-2 whitespace-nowrap text-right text-xs text-gray-900">${flow.after_stock.toFixed(2)}</td>
+                        <td class="px-3 py-2 whitespace-nowrap text-xs text-gray-500">${escapeHtml(flow.operator || '-')}</td>
+                    </tr>
+                `;
+            });
+        }
+        
+        const content = `
+            <div class="space-y-6">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-medium text-gray-900">食材详情</h3>
+                    <span class="status-badge ${status.class}">${status.text}</span>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div><p class="text-sm text-gray-500 mb-1">食材名称</p><p class="text-sm font-medium text-gray-900">${escapeHtml(ingredient.name)}</p></div>
+                    <div><p class="text-sm text-gray-500 mb-1">食材分类</p><p class="text-sm font-medium text-gray-900">${escapeHtml(ingredient.category)}</p></div>
+                    <div><p class="text-sm text-gray-500 mb-1">当前库存</p><p class="text-sm font-medium ${ingredient.stock <= ingredient.stock_low ? 'text-red-600' : 'text-gray-900'}">${ingredient.stock.toFixed(2)} ${escapeHtml(ingredient.unit)}</p></div>
+                    <div><p class="text-sm text-gray-500 mb-1">库存下限</p><p class="text-sm font-medium text-gray-900">${ingredient.stock_low.toFixed(2)} ${escapeHtml(ingredient.unit)}</p></div>
+                    <div><p class="text-sm text-gray-500 mb-1">库存上限</p><p class="text-sm font-medium text-gray-900">${ingredient.stock_high ? ingredient.stock_high.toFixed(2) + ' ' + escapeHtml(ingredient.unit) : '-'}</p></div>
+                    <div><p class="text-sm text-gray-500 mb-1">采购单价</p><p class="text-sm font-medium text-gray-900">¥${ingredient.price.toFixed(2)}/${escapeHtml(ingredient.unit)}</p></div>
+                    <div><p class="text-sm text-gray-500 mb-1">库存价值</p><p class="text-sm font-medium text-red-600">${utils.formatMoney(ingredient.stock * ingredient.price)}</p></div>
+                    <div><p class="text-sm text-gray-500 mb-1">有效期</p><p class="text-sm font-medium text-gray-900">${ingredient.expire_date || '-'}</p></div>
+                </div>
+                
+                <div>
+                    <h4 class="text-sm font-medium text-gray-900 mb-3">最近出入库记录</h4>
+                    <div class="overflow-x-auto max-h-60 overflow-y-auto">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead class="bg-gray-50 sticky top-0">
+                                <tr>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">时间</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">类型</th>
+                                    <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">数量</th>
+                                    <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">变动后库存</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">操作人</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">${flowsHtml}</tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end space-x-3">
+                    <button type="button" onclick="openStockIn('${escapeHtml(ingredient.id)}')" class="px-4 py-2 bg-green-600 text-white rounded-md text-sm hover:bg-green-700">入库</button>
+                    <button type="button" onclick="openStockOut('${escapeHtml(ingredient.id)}')" class="px-4 py-2 bg-orange-600 text-white rounded-md text-sm hover:bg-orange-700">出库</button>
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md text-sm hover:bg-gray-50">关闭</button>
                 </div>
             </div>
-            
-            <div class="flex justify-end space-x-3">
-                <button type="button" onclick="openStockIn('${escapeHtml(ingredient.id)}')" class="px-4 py-2 bg-green-600 text-white rounded-md text-sm hover:bg-green-700">入库</button>
-                <button type="button" onclick="openStockOut('${escapeHtml(ingredient.id)}')" class="px-4 py-2 bg-orange-600 text-white rounded-md text-sm hover:bg-orange-700">出库</button>
-                <button type="button" onclick="closeModal()" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md text-sm hover:bg-gray-50">关闭</button>
-            </div>
-        </div>
-    `;
-    
-    openModal('食材详情', content, null);
+        `;
+        
+        openModal('食材详情', content, null);
+    } catch (e) {
+        console.error(e);
+        utils.showMessage('操作失败：' + e.message, 'error');
+    }
 }
 
-function getRecentFlows(ingredientId, limit = 10) {
-    return db.get('stock_flows')
+async function getRecentFlows(ingredientId, limit = 10) {
+    return (await db.get('stock_flows'))
         .filter(flow => flow.ingredient_id === ingredientId)
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
         .slice(0, limit);
 }
 
-function openStockIn(ingredientId = null) {
-    const ingredients = db.get('ingredients').filter(ing => ing.status === 'enabled');
-    const ingredientOptions = ingredients.map(ing => 
-        `<option value="${escapeHtml(ing.id)}" ${ing.id === ingredientId ? 'selected' : ''}>${escapeHtml(ing.name)} (当前库存: ${ing.stock.toFixed(2)} ${escapeHtml(ing.unit)})</option>`
-    ).join('');
-    
-    const content = `
-        <form id="stock-in-form">
-            <div class="space-y-4">
-                <div>
-                    <label class="form-label">选择食材</label>
-                    <select id="stock-in-ingredient" class="form-select" required>
-                        <option value="">请选择食材</option>
-                        ${ingredientOptions}
-                    </select>
+async function openStockIn(ingredientId = null) {
+    try {
+        const ingredients = (await db.get('ingredients')).filter(ing => ing.status === 'enabled');
+        const ingredientOptions = ingredients.map(ing => 
+            `<option value="${escapeHtml(ing.id)}" ${ing.id === ingredientId ? 'selected' : ''}>${escapeHtml(ing.name)} (当前库存: ${ing.stock.toFixed(2)} ${escapeHtml(ing.unit)})</option>`
+        ).join('');
+        
+        const content = `
+            <form id="stock-in-form">
+                <div class="space-y-4">
+                    <div>
+                        <label class="form-label">选择食材</label>
+                        <select id="stock-in-ingredient" class="form-select" required>
+                            <option value="">请选择食材</option>
+                            ${ingredientOptions}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">入库数量</label>
+                        <input type="number" id="stock-in-quantity" class="form-input" step="0.01" min="0.01" placeholder="请输入入库数量" required>
+                    </div>
+                    <div>
+                        <label class="form-label">入库单价（元）</label>
+                        <input type="number" id="stock-in-price" class="form-input" step="0.01" min="0" placeholder="如留空则使用当前单价">
+                    </div>
+                    <div>
+                        <label class="form-label">新有效期</label>
+                        <input type="date" id="stock-in-expire" class="form-input">
+                    </div>
+                    <div>
+                        <label class="form-label">入库备注</label>
+                        <textarea id="stock-in-remark" class="form-textarea" rows="2" placeholder="请输入入库备注（选填）"></textarea>
+                    </div>
                 </div>
-                <div>
-                    <label class="form-label">入库数量</label>
-                    <input type="number" id="stock-in-quantity" class="form-input" step="0.01" min="0.01" placeholder="请输入入库数量" required>
-                </div>
-                <div>
-                    <label class="form-label">入库单价（元）</label>
-                    <input type="number" id="stock-in-price" class="form-input" step="0.01" min="0" placeholder="如留空则使用当前单价">
-                </div>
-                <div>
-                    <label class="form-label">新有效期</label>
-                    <input type="date" id="stock-in-expire" class="form-input">
-                </div>
-                <div>
-                    <label class="form-label">入库备注</label>
-                    <textarea id="stock-in-remark" class="form-textarea" rows="2" placeholder="请输入入库备注（选填）"></textarea>
-                </div>
-            </div>
-        </form>
-    `;
-    
-    openModal('入库登记', content, function() {
-        submitStockIn();
-    });
+            </form>
+        `;
+        
+        openModal('入库登记', content, async function() {
+            await submitStockIn();
+        });
+    } catch (e) {
+        console.error(e);
+        utils.showMessage('操作失败：' + e.message, 'error');
+    }
 }
 
-function submitStockIn() {
+async function submitStockIn() {
     const ingredientId = document.getElementById('stock-in-ingredient').value;
     const quantity = parseFloat(document.getElementById('stock-in-quantity').value);
     const price = document.getElementById('stock-in-price').value ? parseFloat(document.getElementById('stock-in-price').value) : null;
@@ -648,7 +673,7 @@ function submitStockIn() {
         return false;
     }
     
-    const ingredients = db.get('ingredients');
+    const ingredients = await db.get('ingredients');
     const ingredient = ingredients.find(ing => ing.id === ingredientId);
     if (!ingredient) {
         utils.showMessage('未找到该食材', 'error');
@@ -671,7 +696,7 @@ function submitStockIn() {
         updateData.expire_date = expireDate;
     }
     
-    const updateResult = db.update('ingredients', ingredientId, updateData);
+    const updateResult = await db.update('ingredients', ingredientId, updateData);
     if (!updateResult) {
         utils.showMessage('更新库存失败', 'error');
         return false;
@@ -690,57 +715,62 @@ function submitStockIn() {
         operator: '管理员',
         created_at: new Date().toISOString()
     };
-    db.add('stock_flows', stockFlow);
+    await db.add('stock_flows', stockFlow);
     
     utils.showMessage('入库成功');
-    loadInventoryStats();
-    loadInventoryList();
-    loadStockFlowList();
+    await loadInventoryStats();
+    await loadInventoryList();
+    await loadStockFlowList();
 }
 
-function openStockOut(ingredientId = null) {
-    const ingredients = db.get('ingredients').filter(ing => ing.status === 'enabled' && ing.stock > 0);
-    const ingredientOptions = ingredients.map(ing => 
-        `<option value="${escapeHtml(ing.id)}" ${ing.id === ingredientId ? 'selected' : ''}>${escapeHtml(ing.name)} (当前库存: ${ing.stock.toFixed(2)} ${escapeHtml(ing.unit)})</option>`
-    ).join('');
-    
-    const content = `
-        <form id="stock-out-form">
-            <div class="space-y-4">
-                <div>
-                    <label class="form-label">选择食材</label>
-                    <select id="stock-out-ingredient" class="form-select" required>
-                        <option value="">请选择食材</option>
-                        ${ingredientOptions}
-                    </select>
+async function openStockOut(ingredientId = null) {
+    try {
+        const ingredients = (await db.get('ingredients')).filter(ing => ing.status === 'enabled' && ing.stock > 0);
+        const ingredientOptions = ingredients.map(ing => 
+            `<option value="${escapeHtml(ing.id)}" ${ing.id === ingredientId ? 'selected' : ''}>${escapeHtml(ing.name)} (当前库存: ${ing.stock.toFixed(2)} ${escapeHtml(ing.unit)})</option>`
+        ).join('');
+        
+        const content = `
+            <form id="stock-out-form">
+                <div class="space-y-4">
+                    <div>
+                        <label class="form-label">选择食材</label>
+                        <select id="stock-out-ingredient" class="form-select" required>
+                            <option value="">请选择食材</option>
+                            ${ingredientOptions}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">出库数量</label>
+                        <input type="number" id="stock-out-quantity" class="form-input" step="0.01" min="0.01" placeholder="请输入出库数量" required>
+                    </div>
+                    <div>
+                        <label class="form-label">出库类型</label>
+                        <select id="stock-out-type" class="form-select" required>
+                            <option value="consume">生产消耗</option>
+                            <option value="loss">报损</option>
+                            <option value="return">退货</option>
+                            <option value="other">其他</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">出库备注</label>
+                        <textarea id="stock-out-remark" class="form-textarea" rows="2" placeholder="请输入出库备注（选填）"></textarea>
+                    </div>
                 </div>
-                <div>
-                    <label class="form-label">出库数量</label>
-                    <input type="number" id="stock-out-quantity" class="form-input" step="0.01" min="0.01" placeholder="请输入出库数量" required>
-                </div>
-                <div>
-                    <label class="form-label">出库类型</label>
-                    <select id="stock-out-type" class="form-select" required>
-                        <option value="consume">生产消耗</option>
-                        <option value="loss">报损</option>
-                        <option value="return">退货</option>
-                        <option value="other">其他</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="form-label">出库备注</label>
-                    <textarea id="stock-out-remark" class="form-textarea" rows="2" placeholder="请输入出库备注（选填）"></textarea>
-                </div>
-            </div>
-        </form>
-    `;
-    
-    openModal('出库登记', content, function() {
-        submitStockOut();
-    });
+            </form>
+        `;
+        
+        openModal('出库登记', content, async function() {
+            await submitStockOut();
+        });
+    } catch (e) {
+        console.error(e);
+        utils.showMessage('操作失败：' + e.message, 'error');
+    }
 }
 
-function submitStockOut() {
+async function submitStockOut() {
     const ingredientId = document.getElementById('stock-out-ingredient').value;
     const quantity = parseFloat(document.getElementById('stock-out-quantity').value);
     const outType = document.getElementById('stock-out-type').value;
@@ -751,7 +781,7 @@ function submitStockOut() {
         return false;
     }
     
-    const ingredients = db.get('ingredients');
+    const ingredients = await db.get('ingredients');
     const ingredient = ingredients.find(ing => ing.id === ingredientId);
     if (!ingredient) {
         utils.showMessage('未找到该食材', 'error');
@@ -771,7 +801,7 @@ function submitStockOut() {
         updated_at: new Date().toISOString()
     };
     
-    const updateResult = db.update('ingredients', ingredientId, updateData);
+    const updateResult = await db.update('ingredients', ingredientId, updateData);
     if (!updateResult) {
         utils.showMessage('更新库存失败', 'error');
         return false;
@@ -803,10 +833,10 @@ function submitStockOut() {
         operator: '管理员',
         created_at: new Date().toISOString()
     };
-    db.add('stock_flows', stockFlow);
+    await db.add('stock_flows', stockFlow);
     
     utils.showMessage('出库成功');
-    loadInventoryStats();
-    loadInventoryList();
-    loadStockFlowList();
+    await loadInventoryStats();
+    await loadInventoryList();
+    await loadStockFlowList();
 }

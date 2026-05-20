@@ -1,41 +1,41 @@
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     loadSidebar('purchase.html');
-    loadPurchaseStats();
-    loadSupplierFilter();
-    loadPurchaseList();
+    await loadPurchaseStats();
+    await loadSupplierFilter();
+    await loadPurchaseList();
 });
 
-function loadPurchaseStats() {
-    const purchaseOrders = db.get('purchase_orders');
+async function loadPurchaseStats() {
+    const purchaseOrders = await db.get('purchase_orders');
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
-    
+
     const monthOrders = purchaseOrders.filter(order => {
         const orderDate = new Date(order.date);
         return orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear;
     });
-    
+
     const monthAmount = monthOrders.reduce((sum, order) => sum + order.total_amount, 0);
-    
+
     const pendingCount = purchaseOrders.filter(order => order.status === 'pending_approval').length;
-    
-    const inboundCount = purchaseOrders.filter(order => 
+
+    const inboundCount = purchaseOrders.filter(order =>
         order.status === 'approved' || order.status === 'in_transit' || order.status === 'partial_received'
     ).length;
-    
+
     document.getElementById('stat-month-count').textContent = monthOrders.length;
     document.getElementById('stat-month-amount').textContent = utils.formatMoney(monthAmount);
     document.getElementById('stat-pending-count').textContent = pendingCount;
     document.getElementById('stat-inbound-count').textContent = inboundCount;
 }
 
-function loadSupplierFilter() {
-    const suppliers = db.get('suppliers').filter(s => s.status === 'enabled');
+async function loadSupplierFilter() {
+    const suppliers = (await db.get('suppliers')).filter(s => s.status === 'enabled');
     const select = document.getElementById('filter-supplier');
-    
+
     select.innerHTML = '<option value="all">全部供应商</option>';
-    
+
     suppliers.forEach(supplier => {
         const option = document.createElement('option');
         option.value = supplier.id;
@@ -44,47 +44,47 @@ function loadSupplierFilter() {
     });
 }
 
-function loadPurchaseList() {
-    let purchaseOrders = [...db.get('purchase_orders')];
+async function loadPurchaseList() {
+    let purchaseOrders = [...(await db.get('purchase_orders'))];
     const tableBody = document.getElementById('purchase-table');
-    
+
     const statusFilter = document.getElementById('filter-status').value;
     const supplierFilter = document.getElementById('filter-supplier').value;
     const dateStart = document.getElementById('filter-date-start').value;
     const dateEnd = document.getElementById('filter-date-end').value;
     const keyword = document.getElementById('search-keyword').value.toLowerCase().trim();
-    
+
     if (statusFilter !== 'all') {
         purchaseOrders = purchaseOrders.filter(order => order.status === statusFilter);
     }
-    
+
     if (supplierFilter !== 'all') {
         purchaseOrders = purchaseOrders.filter(order => order.supplier_id === supplierFilter);
     }
-    
+
     if (dateStart) {
         purchaseOrders = purchaseOrders.filter(order => order.date >= dateStart);
     }
     if (dateEnd) {
         purchaseOrders = purchaseOrders.filter(order => order.date <= dateEnd);
     }
-    
+
     if (keyword) {
-        purchaseOrders = purchaseOrders.filter(order => 
-            order.id.toLowerCase().includes(keyword) || 
+        purchaseOrders = purchaseOrders.filter(order =>
+            order.id.toLowerCase().includes(keyword) ||
             order.supplier_name.toLowerCase().includes(keyword) ||
             order.related_menu_id?.toLowerCase().includes(keyword)
         );
     }
-    
+
     purchaseOrders.sort((a, b) => {
         const dateA = a.created_at || a.date;
         const dateB = b.created_at || b.date;
         return new Date(dateB) - new Date(dateA);
     });
-    
+
     document.getElementById('purchase-total').textContent = purchaseOrders.length;
-    
+
     if (purchaseOrders.length === 0) {
         tableBody.innerHTML = `
             <tr>
@@ -97,11 +97,11 @@ function loadPurchaseList() {
         `;
         return;
     }
-    
+
     let html = '';
     purchaseOrders.forEach(order => {
         const statusInfo = getStatusInfo(order.status);
-        
+
         html += `
             <tr>
                 <td class="px-6 py-4 whitespace-nowrap">
@@ -135,7 +135,7 @@ function loadPurchaseList() {
             </tr>
         `;
     });
-    
+
     tableBody.innerHTML = html;
 }
 
@@ -157,7 +157,7 @@ function getStatusInfo(status) {
 
 function getActionButtons(order) {
     let buttons = '';
-    
+
     switch (order.status) {
         case 'pending_approval':
             buttons += `
@@ -189,16 +189,16 @@ function getActionButtons(order) {
             `;
             break;
     }
-    
+
     return buttons;
 }
 
-function viewPurchaseDetail(orderId) {
-    const order = db.get('purchase_orders').find(o => o.id === orderId);
+async function viewPurchaseDetail(orderId) {
+    const order = (await db.get('purchase_orders')).find(o => o.id === orderId);
     if (!order) return;
-    
+
     const statusInfo = getStatusInfo(order.status);
-    
+
     let itemsHtml = order.items.map(item => {
         const received = item.received_quantity || 0;
         const pending = item.quantity - received;
@@ -213,7 +213,7 @@ function viewPurchaseDetail(orderId) {
             </tr>
         `;
     }).join('');
-    
+
     let approvalHtml = '';
     if (order.approval_history && order.approval_history.length > 0) {
         approvalHtml = '<div><h4 class="text-sm font-medium text-gray-900 mb-3">审批记录</h4><div class="space-y-3">' +
@@ -228,14 +228,14 @@ function viewPurchaseDetail(orderId) {
             `).join('') +
         '</div></div>';
     }
-    
+
     const content = `
         <div class="space-y-6">
             <div class="flex justify-between items-center">
                 <h3 class="text-lg font-medium text-gray-900">采购单详情</h3>
                 <span class="status-badge ${statusInfo.class}">${statusInfo.text}</span>
             </div>
-            
+
             <div class="grid grid-cols-2 gap-4">
                 <div><p class="text-sm text-gray-500 mb-1">采购单编号</p><p class="text-sm font-medium text-gray-900">${escapeHtml(order.id)}</p></div>
                 <div><p class="text-sm text-gray-500 mb-1">供应商</p><p class="text-sm font-medium text-gray-900">${escapeHtml(order.supplier_name)}</p></div>
@@ -244,7 +244,7 @@ function viewPurchaseDetail(orderId) {
                 <div><p class="text-sm text-gray-500 mb-1">关联菜谱</p><p class="text-sm font-medium text-gray-900">${escapeHtml(order.related_menu_id || '-')}</p></div>
                 <div><p class="text-sm text-gray-500 mb-1">创建人</p><p class="text-sm font-medium text-gray-900">${escapeHtml(order.creator || '系统')}</p></div>
             </div>
-            
+
             <div>
                 <h4 class="text-sm font-medium text-gray-900 mb-3">采购商品清单</h4>
                 <div class="overflow-x-auto">
@@ -269,20 +269,20 @@ function viewPurchaseDetail(orderId) {
                     </table>
                 </div>
             </div>
-            
+
             ${order.remark ? '<div><h4 class="text-sm font-medium text-gray-900 mb-2">备注信息</h4><div class="bg-gray-50 rounded-md p-3 text-sm text-gray-700">' + escapeHtml(order.remark) + '</div></div>' : ''}
-            
+
             ${approvalHtml}
         </div>
     `;
-    
+
     openModal('采购单详情', content, null);
 }
 
-function approvePurchase(orderId) {
-    const order = db.get('purchase_orders').find(o => o.id === orderId);
+async function approvePurchase(orderId) {
+    const order = (await db.get('purchase_orders')).find(o => o.id === orderId);
     if (!order) return;
-    
+
     const content = `
         <div class="space-y-4">
             <div><p class="text-sm text-gray-500 mb-1">采购单编号</p><p class="text-sm font-medium text-gray-900">${escapeHtml(order.id)}</p></div>
@@ -301,19 +301,19 @@ function approvePurchase(orderId) {
             </div>
         </div>
     `;
-    
+
     openModal('审批采购单', content, function() {
         submitApproval(orderId);
     });
 }
 
-function submitApproval(orderId) {
-    const order = db.get('purchase_orders').find(o => o.id === orderId);
+async function submitApproval(orderId) {
+    const order = (await db.get('purchase_orders')).find(o => o.id === orderId);
     if (!order) return false;
-    
+
     const result = document.getElementById('approval-result').value;
     const comment = document.getElementById('approval-comment').value;
-    
+
     if (!order.approval_history) {
         order.approval_history = [];
     }
@@ -323,47 +323,47 @@ function submitApproval(orderId) {
         result: result,
         comment: comment
     });
-    
+
     if (result === 'approve') {
         utils.showMessage('采购单审批通过');
     } else {
         utils.showMessage('采购单已驳回', 'warning');
     }
-    
-    db.update('purchase_orders', orderId, {
+
+    await db.update('purchase_orders', orderId, {
         status: result === 'approve' ? 'approved' : 'rejected',
         approval_history: order.approval_history,
         updated_at: new Date().toISOString()
     });
-    
-    loadPurchaseStats();
-    loadPurchaseList();
+
+    await loadPurchaseStats();
+    await loadPurchaseList();
 }
 
-function markAsInTransit(orderId) {
+async function markAsInTransit(orderId) {
     const confirmContent = '<p>确定要将该采购单标记为配送中吗？</p>';
-    
-    openModal('确认操作', confirmContent, function() {
-        db.update('purchase_orders', orderId, {
+
+    openModal('确认操作', confirmContent, async function() {
+        await db.update('purchase_orders', orderId, {
             status: 'in_transit',
             updated_at: new Date().toISOString()
         });
-        
+
         utils.showMessage('采购单已标记为配送中');
-        loadPurchaseStats();
-        loadPurchaseList();
+        await loadPurchaseStats();
+        await loadPurchaseList();
     });
 }
 
-function stockInPurchase(orderId) {
-    const order = db.get('purchase_orders').find(o => o.id === orderId);
+async function stockInPurchase(orderId) {
+    const order = (await db.get('purchase_orders')).find(o => o.id === orderId);
     if (!order) return;
-    
+
     let itemsHtml = order.items.map((item, index) => {
         const received = item.received_quantity || 0;
         const remaining = item.quantity - received;
         if (remaining <= 0) return '';
-        
+
         return `
             <div class="grid grid-cols-2 gap-3 items-center">
                 <div>
@@ -377,7 +377,7 @@ function stockInPurchase(orderId) {
             </div>
         `;
     }).join('');
-    
+
     const content = `
         <div class="space-y-4">
             <div><p class="text-sm text-gray-500 mb-1">采购单编号</p><p class="text-sm font-medium text-gray-900">${escapeHtml(order.id)}</p></div>
@@ -392,47 +392,47 @@ function stockInPurchase(orderId) {
             </form>
         </div>
     `;
-    
+
     openModal('入库登记', content, function() {
         submitStockIn(orderId);
     });
 }
 
-function submitStockIn(orderId) {
-    const order = db.get('purchase_orders').find(o => o.id === orderId);
+async function submitStockIn(orderId) {
+    const order = (await db.get('purchase_orders')).find(o => o.id === orderId);
     if (!order) return false;
-    
+
     const form = document.getElementById('stock-in-form');
     const formData = new FormData(form);
-    
+
     const indices = formData.getAll('item-index[]');
     const quantities = formData.getAll('stock-in-quantity[]');
     const remark = document.getElementById('stock-in-remark').value;
-    
+
     let allReceived = true;
-    
-    indices.forEach((indexStr, i) => {
-        const index = parseInt(indexStr);
+
+    for (let i = 0; i < indices.length; i++) {
+        const index = parseInt(indices[i]);
         const quantity = parseFloat(quantities[i]);
-        if (isNaN(quantity) || quantity <= 0) return;
+        if (isNaN(quantity) || quantity <= 0) continue;
         const item = order.items[index];
-        
+
         if (!item.received_quantity) {
             item.received_quantity = 0;
         }
         item.received_quantity += quantity;
-        
+
         if (item.received_quantity < item.quantity) {
             allReceived = false;
         }
-        
-        const ingredients = db.get('ingredients');
+
+        const ingredients = await db.get('ingredients');
         const ingredient = ingredients.find(ing => ing.id === item.ingredient_id);
         if (ingredient) {
             const beforeStock = ingredient.stock;
             const afterStock = beforeStock + quantity;
-            db.update('ingredients', ingredient.id, { stock: afterStock });
-            
+            await db.update('ingredients', ingredient.id, { stock: afterStock });
+
             const stockFlow = {
                 id: utils.generateId('STK'),
                 ingredient_id: ingredient.id,
@@ -446,10 +446,10 @@ function submitStockIn(orderId) {
                 operator: '管理员',
                 created_at: new Date().toISOString()
             };
-            db.add('stock_flows', stockFlow);
+            await db.add('stock_flows', stockFlow);
         }
-    });
-    
+    }
+
     if (!order.stock_in_history) {
         order.stock_in_history = [];
     }
@@ -465,47 +465,47 @@ function submitStockIn(orderId) {
             };
         })
     });
-    
-    db.update('purchase_orders', orderId, {
+
+    await db.update('purchase_orders', orderId, {
         items: order.items,
         status: allReceived ? 'completed' : 'partial_received',
         updated_at: new Date().toISOString(),
         stock_in_history: order.stock_in_history
     });
-    
+
     if (allReceived) {
         utils.showMessage('全部商品已入库，采购单已完成');
     } else {
         utils.showMessage('部分商品已入库');
     }
-    
-    loadPurchaseStats();
-    loadPurchaseList();
+
+    await loadPurchaseStats();
+    await loadPurchaseList();
 }
 
-function cancelPurchase(orderId) {
+async function cancelPurchase(orderId) {
     const confirmContent = '<p>确定要取消该采购单吗？取消后无法恢复。</p>';
-    
-    openModal('确认取消', confirmContent, function() {
-        db.update('purchase_orders', orderId, {
+
+    openModal('确认取消', confirmContent, async function() {
+        await db.update('purchase_orders', orderId, {
             status: 'cancelled',
             updated_at: new Date().toISOString()
         });
-        
+
         utils.showMessage('采购单已取消');
-        loadPurchaseStats();
-        loadPurchaseList();
+        await loadPurchaseStats();
+        await loadPurchaseList();
     });
 }
 
-function deletePurchase(orderId) {
+async function deletePurchase(orderId) {
     const confirmContent = '<p>确定要删除该采购单吗？删除后无法恢复。</p>';
-    
-    openModal('确认删除', confirmContent, function() {
-        db.delete('purchase_orders', orderId);
+
+    openModal('确认删除', confirmContent, async function() {
+        await db.delete('purchase_orders', orderId);
         utils.showMessage('采购单已删除');
-        loadPurchaseStats();
-        loadPurchaseList();
+        await loadPurchaseStats();
+        await loadPurchaseList();
     });
 }
 

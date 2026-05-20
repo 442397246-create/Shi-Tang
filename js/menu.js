@@ -2,9 +2,9 @@ let currentTab = 'weekly';
 let currentWeekStart = new Date();
 currentWeekStart.setDate(currentWeekStart.getDate() - currentWeekStart.getDay());
 
-document.addEventListener('DOMContentLoaded', function() {
-    loadWeeklyMenu();
-    loadDishList();
+document.addEventListener('DOMContentLoaded', async function() {
+    await loadWeeklyMenu();
+    await loadDishList();
     updateWeekText();
 });
 
@@ -43,8 +43,8 @@ function nextWeek() {
     loadWeeklyMenu();
 }
 
-function loadWeeklyMenu() {
-    const weeklyMenus = db.get('weekly_menus');
+async function loadWeeklyMenu() {
+    const weeklyMenus = await db.get('weekly_menus');
     const tableBody = document.getElementById('weekly-menu-table');
     
     const weekDays = [];
@@ -64,7 +64,7 @@ function loadWeeklyMenu() {
     }
 
     let html = '';
-    weekDays.forEach(day => {
+    for (const day of weekDays) {
         const menu = weeklyMenus.find(m => m.date === day.dateStr);
         
         const getMealDishes = (meal) => {
@@ -74,7 +74,7 @@ function loadWeeklyMenu() {
             return menu.meals[meal].map(d => escapeHtml(d.name)).join('、');
         };
 
-        const totalCost = menu ? calculateMenuTotalCost(menu) : 0;
+        const totalCost = menu ? await calculateMenuTotalCost(menu) : 0;
         
         let statusBadge = '';
         if (menu) {
@@ -120,7 +120,7 @@ function loadWeeklyMenu() {
                 </td>
             </tr>
         `;
-    });
+    }
 
     tableBody.innerHTML = html;
     updateBatchButton();
@@ -193,23 +193,22 @@ function batchDeleteMenu() {
         '<p class="text-xs text-gray-500">关联的采购单不会被自动删除</p>' +
     '</div>';
     
-    openModal('确认批量删除', content, function() {
-        var deleted = 0;
-        menuIds.forEach(function(id) {
-            if (db.delete('weekly_menus', id)) deleted++;
-        });
+    openModal('确认批量删除', content, async function() {
+        for (const id of menuIds) {
+            await db.delete('weekly_menus', id);
+        }
         
         document.querySelectorAll('.menu-checkbox').forEach(function(cb) { cb.checked = false; });
         var selectAll = document.getElementById('select-all-menu');
         if (selectAll) selectAll.checked = false;
         updateBatchButton();
         
-        utils.showMessage('已删除 ' + deleted + ' 天菜谱');
+        utils.showMessage('已删除 ' + menuIds.length + ' 天菜谱');
         loadWeeklyMenu();
     });
 }
 
-function batchGeneratePurchase() {
+async function batchGeneratePurchase() {
     var checked = document.querySelectorAll('.menu-checkbox:checked');
     if (checked.length === 0) {
         utils.showMessage('请先选择菜谱', 'warning');
@@ -221,22 +220,23 @@ function batchGeneratePurchase() {
     
     var allBudget = [];
     var menuNames = [];
-    menuIds.forEach(function(menuId) {
-        var menu = db.get('weekly_menus').find(function(m) { return m.id === menuId; });
+    const weeklyMenus = await db.get('weekly_menus');
+    for (const menuId of menuIds) {
+        var menu = weeklyMenus.find(function(m) { return m.id === menuId; });
         if (menu) {
-            var budget = utils.calculatePurchaseBudget(menu);
+            var budget = await utils.calculatePurchaseBudget(menu);
             var needItems = budget.filter(function(item) { return item.need_purchase > 0; });
             allBudget = allBudget.concat(needItems);
             menuNames.push(menu.date + '(' + menu.week_day + ')');
         }
-    });
+    }
     
     if (allBudget.length === 0) {
         utils.showMessage('所选菜谱无需采购的食材', 'warning');
         return;
     }
     
-    var suppliers = db.get('suppliers');
+    var suppliers = await db.get('suppliers');
     var supplierGroups = {};
     var noSupplierItems = [];
     
@@ -311,12 +311,10 @@ function batchGeneratePurchase() {
         previewHtml +
     '</div>';
     
-    openModal('批量生成采购单', content, function() {
-        var createdCount = 0;
-        
-        Object.keys(supplierGroups).forEach(function(supplierId) {
+    openModal('批量生成采购单', content, async function() {
+        for (const supplierId of Object.keys(supplierGroups)) {
             var supplier = suppliers.find(function(s) { return s.id === supplierId; });
-            if (!supplier) return;
+            if (!supplier) continue;
             
             var items = supplierGroups[supplierId].map(function(item) {
                 return {
@@ -329,7 +327,7 @@ function batchGeneratePurchase() {
                 };
             });
             
-            db.add('purchase_orders', {
+            await db.add('purchase_orders', {
                 id: utils.generateId('CG'),
                 supplier_id: supplierId,
                 supplier_name: supplier.name,
@@ -343,11 +341,10 @@ function batchGeneratePurchase() {
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
             });
-            createdCount++;
-        });
+        }
         
         if (noSupplierItems.length > 0) {
-            db.add('purchase_orders', {
+            await db.add('purchase_orders', {
                 id: utils.generateId('CG'),
                 supplier_id: '',
                 supplier_name: '未指定供应商',
@@ -363,7 +360,6 @@ function batchGeneratePurchase() {
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
             });
-            createdCount++;
         }
         
         document.querySelectorAll('.menu-checkbox').forEach(function(cb) { cb.checked = false; });
@@ -371,7 +367,7 @@ function batchGeneratePurchase() {
         if (selectAll) selectAll.checked = false;
         updateBatchButton();
         
-        utils.showMessage('已按供应商自动生成 ' + createdCount + ' 张采购单，请前往采购管理查看');
+        utils.showMessage('已按供应商自动生成采购单，请前往采购管理查看');
     });
 }
 
@@ -406,8 +402,8 @@ function generateEmptyWeekMenu(weekDays) {
     return html;
 }
 
-function createMenu(date, weekDay) {
-    const dishes = db.get('dishes').filter(d => d.status === 'enabled');
+async function createMenu(date, weekDay) {
+    const dishes = (await db.get('dishes')).filter(d => d.status === 'enabled');
     const dishOptions = dishes.map(d => `<option value="${escapeHtml(d.id)}">${escapeHtml(d.name)}</option>`).join('');
     
     const content = `
@@ -478,8 +474,8 @@ function createMenu(date, weekDay) {
     });
 }
 
-function addMealItem(mealType) {
-    const dishes = db.get('dishes').filter(d => d.status === 'enabled');
+async function addMealItem(mealType) {
+    const dishes = (await db.get('dishes')).filter(d => d.status === 'enabled');
     const dishOptions = dishes.map(d => `<option value="${escapeHtml(d.id)}">${escapeHtml(d.name)}</option>`).join('');
     
     const container = document.getElementById(`${mealType}-meals`);
@@ -500,7 +496,7 @@ function addMealItem(mealType) {
     container.appendChild(item);
 }
 
-function saveMenu() {
+async function saveMenu() {
     const form = document.getElementById('menu-form');
     if (!form) return false;
     const formData = new FormData(form);
@@ -520,68 +516,73 @@ function saveMenu() {
         updated_at: new Date().toISOString()
     };
 
+    const allDishes = await db.get('dishes');
     const breakfastDishes = formData.getAll('breakfast_dish[]');
     const breakfastDiners = formData.getAll('breakfast_diners[]');
-    breakfastDishes.forEach((dishId, index) => {
-        if (dishId && breakfastDiners[index]) {
-            const dish = db.get('dishes').find(d => d.id === dishId);
+    for (let i = 0; i < breakfastDishes.length; i++) {
+        const dishId = breakfastDishes[i];
+        if (dishId && breakfastDiners[i]) {
+            const dish = allDishes.find(d => d.id === dishId);
             if (dish) {
                 menu.meals.breakfast.push({
                     dish_id: dishId,
                     name: dish.name,
-                    estimated_diners: parseInt(breakfastDiners[index])
+                    estimated_diners: parseInt(breakfastDiners[i])
                 });
             }
         }
-    });
+    }
     
     const lunchDishes = formData.getAll('lunch_dish[]');
     const lunchDiners = formData.getAll('lunch_diners[]');
-    lunchDishes.forEach((dishId, index) => {
-        if (dishId && lunchDiners[index]) {
-            const dish = db.get('dishes').find(d => d.id === dishId);
+    for (let i = 0; i < lunchDishes.length; i++) {
+        const dishId = lunchDishes[i];
+        if (dishId && lunchDiners[i]) {
+            const dish = allDishes.find(d => d.id === dishId);
             if (dish) {
                 menu.meals.lunch.push({
                     dish_id: dishId,
                     name: dish.name,
-                    estimated_diners: parseInt(lunchDiners[index])
+                    estimated_diners: parseInt(lunchDiners[i])
                 });
             }
         }
-    });
+    }
     
     const dinnerDishes = formData.getAll('dinner_dish[]');
     const dinnerDiners = formData.getAll('dinner_diners[]');
-    dinnerDishes.forEach((dishId, index) => {
-        if (dishId && dinnerDiners[index]) {
-            const dish = db.get('dishes').find(d => d.id === dishId);
+    for (let i = 0; i < dinnerDishes.length; i++) {
+        const dishId = dinnerDishes[i];
+        if (dishId && dinnerDiners[i]) {
+            const dish = allDishes.find(d => d.id === dishId);
             if (dish) {
                 menu.meals.dinner.push({
                     dish_id: dishId,
                     name: dish.name,
-                    estimated_diners: parseInt(dinnerDiners[index])
+                    estimated_diners: parseInt(dinnerDiners[i])
                 });
             }
         }
-    });
+    }
 
-    const existing = db.get('weekly_menus').find(m => m.id === menu.id);
+    const weeklyMenus = await db.get('weekly_menus');
+    const existing = weeklyMenus.find(m => m.id === menu.id);
     if (existing) {
-        db.update('weekly_menus', menu.id, {
+        await db.update('weekly_menus', menu.id, {
             meals: menu.meals,
             total_diners: menu.total_diners,
             status: menu.status,
             updated_at: menu.updated_at
         });
     } else {
-        db.add('weekly_menus', menu);
+        await db.add('weekly_menus', menu);
     }
     utils.showMessage('菜谱创建成功');
     loadWeeklyMenu();
 }
 
-function generateWeeklyMenu() {
-    var dishes = db.get('dishes').filter(function(d) { return d.status === 'enabled'; });
+async function generateWeeklyMenu() {
+    var dishes = (await db.get('dishes')).filter(function(d) { return d.status === 'enabled'; });
     var categories = [];
     dishes.forEach(function(d) {
         if (categories.indexOf(d.category) === -1) categories.push(d.category);
@@ -613,7 +614,7 @@ function generateWeeklyMenu() {
         '</div></div>' +
     '</form>';
     
-    openModal('智能生成周菜谱', content, function() {
+    openModal('智能生成周菜谱', content, async function() {
         var form = document.getElementById('generate-menu-form');
         var fd = new FormData(form);
         var options = {
@@ -630,12 +631,12 @@ function generateWeeklyMenu() {
             preferHighSales: !!fd.get('prefer_high_sales'),
             preferExpiring: !!fd.get('prefer_expiring')
         };
-        previewGeneratedMenu(options);
+        await previewGeneratedMenu(options);
     });
 }
 
-function previewGeneratedMenu(options) {
-    var generatedMenus = buildWeeklyMenus(options);
+async function previewGeneratedMenu(options) {
+    var generatedMenus = await buildWeeklyMenus(options);
     if (!generatedMenus || generatedMenus.length === 0) {
         utils.showMessage('无法生成菜谱，请检查菜品数据', 'error');
         return false;
@@ -643,19 +644,20 @@ function previewGeneratedMenu(options) {
     
     var totalDiners = 0;
     var totalCost = 0;
-    generatedMenus.forEach(function(menu) {
+    for (const menu of generatedMenus) {
         totalDiners += menu.total_diners || 0;
-        totalCost += calculateMenuTotalCost(menu);
-    });
+        totalCost += await calculateMenuTotalCost(menu);
+    }
     
-    var previewHtml = generatedMenus.map(function(menu) {
+    var previewHtml = '';
+    for (const menu of generatedMenus) {
         var mealHtml = function(meal, label) {
             if (!meal || meal.length === 0) return '';
             return '<div class="mb-2"><span class="text-xs font-medium text-gray-500">' + label + '：</span>' +
                 meal.map(function(d) { return '<span class="inline-block px-2 py-0.5 text-xs bg-blue-50 text-blue-700 rounded mr-1 mb-1">' + escapeHtml(d.name) + ' <span class="text-blue-400">' + d.estimated_diners + '人</span></span>'; }).join('') +
             '</div>';
         };
-        return '<div class="border rounded-md p-3 mb-2">' +
+        previewHtml += '<div class="border rounded-md p-3 mb-2">' +
             '<div class="flex justify-between items-center mb-2">' +
                 '<span class="font-medium text-sm">' + escapeHtml(menu.week_day) + ' <span class="text-gray-400 font-normal">' + escapeHtml(menu.date) + '</span></span>' +
                 '<span class="text-xs text-gray-500">' + menu.total_diners + '人</span>' +
@@ -664,7 +666,7 @@ function previewGeneratedMenu(options) {
             mealHtml(menu.meals.lunch, '午餐') +
             mealHtml(menu.meals.dinner, '晚餐') +
         '</div>';
-    }).join('');
+    }
     
     var content = '<div class="space-y-4">' +
         '<div class="flex justify-between items-center bg-gray-50 rounded-md p-3">' +
@@ -675,27 +677,28 @@ function previewGeneratedMenu(options) {
         '<div style="max-height:400px;overflow-y:auto">' + previewHtml + '</div>' +
     '</div>';
     
-    openModal('预览生成结果', content, function() {
-        generatedMenus.forEach(function(menu) {
-            var existing = db.get('weekly_menus').find(function(m) { return m.id === menu.id; });
+    openModal('预览生成结果', content, async function() {
+        const weeklyMenus = await db.get('weekly_menus');
+        for (const menu of generatedMenus) {
+            var existing = weeklyMenus.find(function(m) { return m.id === menu.id; });
             if (existing) {
-                db.update('weekly_menus', menu.id, {
+                await db.update('weekly_menus', menu.id, {
                     meals: menu.meals,
                     total_diners: menu.total_diners,
                     status: 'draft',
                     updated_at: menu.updated_at
                 });
             } else {
-                db.add('weekly_menus', menu);
+                await db.add('weekly_menus', menu);
             }
-        });
+        }
         utils.showMessage('周菜谱生成成功');
         loadWeeklyMenu();
     });
 }
 
-function buildWeeklyMenus(options) {
-    var allDishes = db.get('dishes').filter(function(d) { return d.status === 'enabled'; });
+async function buildWeeklyMenus(options) {
+    var allDishes = (await db.get('dishes')).filter(function(d) { return d.status === 'enabled'; });
     
     if (allDishes.length === 0) return [];
     
@@ -705,7 +708,7 @@ function buildWeeklyMenus(options) {
     
     if (dishes.length === 0) return [];
     
-    var ingredients = db.get('ingredients');
+    var ingredients = await db.get('ingredients');
     
     var scoredDishes = dishes.map(function(dish) {
         var score = 50;
@@ -791,23 +794,11 @@ function buildWeeklyMenus(options) {
     return weeklyMenus;
 }
 
-function getRandomDish(dishes, usedDishes) {
-    const unusedDishes = dishes.filter(d => !usedDishes.has(d.id));
-    if (unusedDishes.length > 0) {
-        const randomIndex = Math.floor(Math.random() * Math.min(5, unusedDishes.length));
-        return unusedDishes[randomIndex];
-    } else if (dishes.length > 0) {
-        const randomIndex = Math.floor(Math.random() * Math.min(5, dishes.length));
-        return dishes[randomIndex];
-    }
-    return null;
-}
-
 function publishWeekMenu() {
     const confirmContent = '<p>确定要发布本周菜谱吗？发布后菜谱将无法修改。</p>';
     
-    openModal('确认发布', confirmContent, function() {
-        const weeklyMenus = db.get('weekly_menus');
+    openModal('确认发布', confirmContent, async function() {
+        const weeklyMenus = await db.get('weekly_menus');
         
         for (let i = 0; i < 7; i++) {
             const date = new Date(currentWeekStart);
@@ -816,7 +807,7 @@ function publishWeekMenu() {
             
             const menu = weeklyMenus.find(m => m.date === dateStr);
             if (menu) {
-                db.update('weekly_menus', menu.id, {
+                await db.update('weekly_menus', menu.id, {
                     status: 'published',
                     updated_at: new Date().toISOString()
                 });
@@ -828,8 +819,8 @@ function publishWeekMenu() {
     });
 }
 
-function copyPreviousWeekMenu() {
-    var currentMenus = db.get('weekly_menus');
+async function copyPreviousWeekMenu() {
+    var currentMenus = await db.get('weekly_menus');
     var weekDays = [];
     for (var i = 0; i < 7; i++) {
         var date = new Date(currentWeekStart);
@@ -865,7 +856,7 @@ function copyPreviousWeekMenu() {
         '<div><label class="form-label">复制到（多选）</label><div class="flex flex-wrap mt-1">' + targetCheckboxes + '</div><p class="text-xs text-gray-400 mt-1">已有菜谱的日期不可覆盖，如需覆盖请先删除</p></div>' +
     '</div>';
     
-    openModal('同步菜谱', content, function() {
+    openModal('同步菜谱', content, async function() {
         var sourceDate = document.getElementById('copy-source').value;
         var sourceMenu = currentMenus.find(function(m) { return m.date === sourceDate; });
         if (!sourceMenu) { utils.showMessage('请选择源菜谱', 'error'); return false; }
@@ -874,10 +865,9 @@ function copyPreviousWeekMenu() {
         var targets = Array.from(form.querySelectorAll('input[name="target_days"]:checked')).map(function(cb) { return cb.value; });
         if (targets.length === 0) { utils.showMessage('请选择至少一个目标日期', 'error'); return false; }
         
-        var copied = 0;
-        targets.forEach(function(dateStr) {
+        for (const dateStr of targets) {
             var dayInfo = weekDays.find(function(d) { return d.dateStr === dateStr; });
-            if (!dayInfo) return;
+            if (!dayInfo) continue;
             
             var newMenu = JSON.parse(JSON.stringify(sourceMenu));
             newMenu.id = 'MENU' + dateStr.replace(/-/g, '');
@@ -887,23 +877,23 @@ function copyPreviousWeekMenu() {
             newMenu.created_at = new Date().toISOString();
             newMenu.updated_at = new Date().toISOString();
             
-            db.add('weekly_menus', newMenu);
-            copied++;
-        });
+            await db.add('weekly_menus', newMenu);
+        }
         
-        utils.showMessage('已复制菜谱到 ' + copied + ' 天');
+        utils.showMessage('已复制菜谱到 ' + targets.length + ' 天');
         loadWeeklyMenu();
     });
 }
 
-function generatePurchaseBudget(menuId) {
-    const menu = db.get('weekly_menus').find(m => m.id === menuId);
+async function generatePurchaseBudget(menuId) {
+    const weeklyMenus = await db.get('weekly_menus');
+    const menu = weeklyMenus.find(m => m.id === menuId);
     if (!menu) {
         utils.showMessage('菜谱不存在', 'error');
         return false;
     }
     
-    const budget = utils.calculatePurchaseBudget(menu);
+    const budget = await utils.calculatePurchaseBudget(menu);
     const needPurchaseItems = budget.filter(item => item.need_purchase > 0);
     
     if (needPurchaseItems.length === 0) {
@@ -911,7 +901,7 @@ function generatePurchaseBudget(menuId) {
         return false;
     }
     
-    const suppliers = db.get('suppliers');
+    const suppliers = await db.get('suppliers');
     const supplierGroups = {};
     const noSupplierItems = [];
     
@@ -979,10 +969,10 @@ function generatePurchaseBudget(menuId) {
         </div>
     `;
     
-    openModal('生成采购单', content, function() {
-        Object.keys(supplierGroups).forEach(supplierId => {
+    openModal('生成采购单', content, async function() {
+        for (const supplierId of Object.keys(supplierGroups)) {
             const supplier = suppliers.find(s => s.id === supplierId);
-            if (!supplier) return;
+            if (!supplier) continue;
             
             const items = supplierGroups[supplierId].map(item => ({
                 ingredient_id: item.ingredient_id,
@@ -993,7 +983,7 @@ function generatePurchaseBudget(menuId) {
                 received_quantity: 0
             }));
             
-            db.add('purchase_orders', {
+            await db.add('purchase_orders', {
                 id: utils.generateId('CG'),
                 supplier_id: supplierId,
                 supplier_name: supplier.name,
@@ -1007,10 +997,10 @@ function generatePurchaseBudget(menuId) {
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
             });
-        });
+        }
         
         if (noSupplierItems.length > 0) {
-            db.add('purchase_orders', {
+            await db.add('purchase_orders', {
                 id: utils.generateId('CG'),
                 supplier_id: '',
                 supplier_name: '未指定供应商',
@@ -1033,12 +1023,12 @@ function generatePurchaseBudget(menuId) {
             });
         }
         
-        utils.showMessage('已按供应商自动生成 ' + (Object.keys(supplierGroups).length + (noSupplierItems.length > 0 ? 1 : 0)) + ' 张采购单，请前往采购管理查看');
+        utils.showMessage('已按供应商自动生成采购单，请前往采购管理查看');
     });
 }
 
-function loadDishList() {
-    const dishes = db.get('dishes');
+async function loadDishList() {
+    const dishes = await db.get('dishes');
     const tableBody = document.getElementById('dish-table');
     
     if (dishes.length === 0) {
@@ -1125,12 +1115,12 @@ function getCategoryClass(category) {
     return classMap[category] || 'bg-gray-100 text-gray-800';
 }
 
-function searchDishes() {
+async function searchDishes() {
     const keyword = document.getElementById('dish-search').value.toLowerCase().trim();
     const category = document.getElementById('dish-category').value;
     const status = document.getElementById('dish-status').value;
     
-    let dishes = db.get('dishes');
+    let dishes = await db.get('dishes');
     
     if (keyword) {
         dishes = dishes.filter(d => d.name.toLowerCase().includes(keyword));
@@ -1187,8 +1177,8 @@ function searchDishes() {
     tableBody.innerHTML = html;
 }
 
-function addDish() {
-    const ingredients = db.get('ingredients').filter(i => i.status === 'enabled');
+async function addDish() {
+    const ingredients = (await db.get('ingredients')).filter(i => i.status === 'enabled');
     const ingredientOptions = ingredients.map(i => `<option value="${escapeHtml(i.id)}">${escapeHtml(i.name)}</option>`).join('');
     
     const content = `
@@ -1250,7 +1240,7 @@ function addDish() {
         </form>
     `;
     
-    openModal('新增菜品', content, function() {
+    openModal('新增菜品', content, async function() {
         const form = document.getElementById('dish-form');
         const formData = new FormData(form);
         
@@ -1262,8 +1252,9 @@ function addDish() {
             return false;
         }
         
+        const allIngredients = await db.get('ingredients');
         const ingredients = ingredientIds.map((id, index) => {
-            const ing = db.get('ingredients').find(i => i.id === id);
+            const ing = allIngredients.find(i => i.id === id);
             return {
                 ingredient_id: id,
                 name: ing ? ing.name : '',
@@ -1284,19 +1275,19 @@ function addDish() {
             leftover_rate: 0.05
         };
         
-        db.add('dishes', dish);
+        await db.add('dishes', dish);
         utils.showMessage('菜品新增成功');
         loadDishList();
     });
 }
 
-function addIngredientRow() {
-    const ingredients = db.get('ingredients').filter(i => i.status === 'enabled');
+async function addIngredientRow() {
+    const ingredients = (await db.get('ingredients')).filter(i => i.status === 'enabled');
     const ingredientOptions = ingredients.map(i => `<option value="${escapeHtml(i.id)}">${escapeHtml(i.name)}</option>`).join('');
     
     const container = document.getElementById('dish-ingredients');
     const item = document.createElement('div');
-    item.className = 'grid grid-cols-2 gap-3';
+    item.className = 'grid grid-cols-2 gap-3 mb-3';
     item.innerHTML = `
         <select name="ingredient_id[]" class="form-select" required>
             <option value="">请选择食材</option>
@@ -1312,11 +1303,12 @@ function addIngredientRow() {
     container.appendChild(item);
 }
 
-function editDish(dishId) {
-    const dish = db.get('dishes').find(d => d.id === dishId);
+async function editDish(dishId) {
+    const dishes = await db.get('dishes');
+    const dish = dishes.find(d => d.id === dishId);
     if (!dish) return;
     
-    const ingredients = db.get('ingredients').filter(i => i.status === 'enabled');
+    const ingredients = (await db.get('ingredients')).filter(i => i.status === 'enabled');
     const ingredientOptions = ingredients.map(i => `<option value="${escapeHtml(i.id)}">${escapeHtml(i.name)}</option>`).join('');
     
     let ingredientsHtml = '';
@@ -1387,7 +1379,7 @@ function editDish(dishId) {
         </form>
     `;
     
-    openModal('编辑菜品', content, function() {
+    openModal('编辑菜品', content, async function() {
         const form = document.getElementById('edit-dish-form');
         const formData = new FormData(form);
         
@@ -1399,8 +1391,9 @@ function editDish(dishId) {
             return false;
         }
         
+        const allIngredients = await db.get('ingredients');
         const newIngredients = ingredientIds.map((id, index) => {
-            const ing = db.get('ingredients').find(i => i.id === id);
+            const ing = allIngredients.find(i => i.id === id);
             return {
                 ingredient_id: id,
                 name: ing ? ing.name : '',
@@ -1408,7 +1401,7 @@ function editDish(dishId) {
             };
         });
         
-        db.update('dishes', dishId, {
+        await db.update('dishes', dishId, {
             name: formData.get('name'),
             category: formData.get('category'),
             price: parseFloat(formData.get('price')),
@@ -1423,8 +1416,8 @@ function editDish(dishId) {
     });
 }
 
-function addEditIngredientRow() {
-    const ingredients = db.get('ingredients').filter(i => i.status === 'enabled');
+async function addEditIngredientRow() {
+    const ingredients = (await db.get('ingredients')).filter(i => i.status === 'enabled');
     const ingredientOptions = ingredients.map(i => `<option value="${escapeHtml(i.id)}">${escapeHtml(i.name)}</option>`).join('');
     
     const container = document.getElementById('edit-dish-ingredients');
@@ -1447,8 +1440,8 @@ function addEditIngredientRow() {
 
 function deleteDish(dishId, dishName) {
     const content = `<p>确定要删除菜品 <strong>${escapeHtml(dishName)}</strong> 吗？此操作不可恢复。</p>`;
-    openModal('确认删除', content, function() {
-        db.delete('dishes', dishId);
+    openModal('确认删除', content, async function() {
+        await db.delete('dishes', dishId);
         utils.showMessage('菜品已删除');
         loadDishList();
     });
@@ -1456,18 +1449,19 @@ function deleteDish(dishId, dishName) {
 
 function deleteMenu(menuId, dateStr, weekDay) {
     const content = `<p>确定要删除 <strong>${escapeHtml(weekDay)}（${escapeHtml(dateStr)}）</strong> 的菜谱吗？</p><p class="mt-2 text-sm text-gray-500">删除后可以重新创建，但关联的采购单不会自动删除。</p>`;
-    openModal('确认删除菜谱', content, function() {
-        db.delete('weekly_menus', menuId);
+    openModal('确认删除菜谱', content, async function() {
+        await db.delete('weekly_menus', menuId);
         utils.showMessage('菜谱已删除');
         loadWeeklyMenu();
     });
 }
 
-function editMenu(menuId) {
-    const menu = db.get('weekly_menus').find(m => m.id === menuId);
+async function editMenu(menuId) {
+    const weeklyMenus = await db.get('weekly_menus');
+    const menu = weeklyMenus.find(m => m.id === menuId);
     if (!menu) return;
     
-    const dishes = db.get('dishes').filter(d => d.status === 'enabled');
+    const dishes = (await db.get('dishes')).filter(d => d.status === 'enabled');
     
     const getDishOptions = (selectedId) => {
         return dishes.map(d => `<option value="${escapeHtml(d.id)}" ${d.id === selectedId ? 'selected' : ''}>${escapeHtml(d.name)}</option>`).join('');
@@ -1505,16 +1499,17 @@ function editMenu(menuId) {
     openModal('编辑菜谱 - ' + escapeHtml(menu.date), content, function() { saveMenuEdit(menuId); });
 }
 
-function saveMenuEdit(menuId) {
+async function saveMenuEdit(menuId) {
     var form = document.getElementById('edit-menu-form');
     var fd = new FormData(form);
     var menu = { meals: { breakfast: [], lunch: [], dinner: [] }, total_diners: parseInt(fd.get('total_diners')) || 0, status: 'draft' };
+    const allDishes = await db.get('dishes');
     ['breakfast','lunch','dinner'].forEach(function(mealType) {
         var dishes = fd.getAll(mealType + '_dish[]');
         var diners = fd.getAll(mealType + '_diners[]');
         dishes.forEach(function(id, i) {
             if (id && diners[i]) {
-                var dish = db.get('dishes').find(function(d) { return d.id === id; });
+                var dish = allDishes.find(function(d) { return d.id === id; });
                 if (dish) {
                     menu.meals[mealType].push({ dish_id: id, name: dish.name, estimated_diners: parseInt(diners[i]) });
                 }
@@ -1522,7 +1517,7 @@ function saveMenuEdit(menuId) {
         });
     });
     menu.updated_at = new Date().toISOString();
-    db.update('weekly_menus', menuId, {
+    await db.update('weekly_menus', menuId, {
         meals: menu.meals,
         total_diners: menu.total_diners,
         status: 'draft',
@@ -1532,15 +1527,16 @@ function saveMenuEdit(menuId) {
     loadWeeklyMenu();
 }
 
-function addMealRow(containerId, mealType) {
-    var dishes = db.get('dishes').filter(function(d) { return d.status === 'enabled'; });
+async function addMealRow(containerId, mealType) {
+    var dishes = (await db.get('dishes')).filter(function(d) { return d.status === 'enabled'; });
     var opts = dishes.map(function(d) { return '<option value="' + escapeHtml(d.id) + '">' + escapeHtml(d.name) + '</option>'; }).join('');
     var html = '<div class="grid grid-cols-2 gap-3 mb-3"><select name="' + mealType + '_dish[]" class="form-select"><option value="">请选择菜品</option>' + opts + '</select><div class="flex space-x-2"><input type="number" name="' + mealType + '_diners[]" class="form-input flex-1" placeholder="就餐人数"><button type="button" onclick="this.parentElement.parentElement.remove()" class="px-2 py-1 bg-red-600 text-white rounded text-xs"><i class="fas fa-times"></i></button></div></div>';
     document.getElementById(containerId).insertAdjacentHTML('beforeend', html);
 }
 
-function viewMenuDetail(menuId) {
-    const menu = db.get('weekly_menus').find(m => m.id === menuId);
+async function viewMenuDetail(menuId) {
+    const weeklyMenus = await db.get('weekly_menus');
+    const menu = weeklyMenus.find(m => m.id === menuId);
     if (!menu) return;
 
     let content = `
@@ -1596,7 +1592,7 @@ function viewMenuDetail(menuId) {
                     </div>
                     <div class="flex justify-between mt-1">
                         <span>预计采购金额：</span>
-                        <span class="font-medium text-red-600">${utils.formatMoney(calculateMenuTotalCost(menu))}</span>
+                        <span class="font-medium text-red-600">${utils.formatMoney(await calculateMenuTotalCost(menu))}</span>
                     </div>
                 </div>
             </div>
@@ -1606,7 +1602,7 @@ function viewMenuDetail(menuId) {
     openModal('菜谱详情', content, null);
 }
 
-function calculateMenuTotalCost(menu) {
-    const budget = utils.calculatePurchaseBudget(menu);
+async function calculateMenuTotalCost(menu) {
+    const budget = await utils.calculatePurchaseBudget(menu);
     return budget.reduce((sum, item) => sum + item.amount, 0);
 }

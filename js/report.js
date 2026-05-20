@@ -1,27 +1,32 @@
 var periodDays = 7;
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     loadSidebar('report.html');
-    document.getElementById('period-select').addEventListener('change', function() {
-        periodDays = parseInt(this.value); refreshAll();
+    document.getElementById('period-select').addEventListener('change', async function() {
+        periodDays = parseInt(this.value);
+        try { await refreshAll(); } catch(err) { utils.showMessage('刷新失败', 'error'); }
     });
-    document.getElementById('refresh-btn').addEventListener('click', refreshAll);
-    document.getElementById('export-btn').addEventListener('click', exportReport);
+    document.getElementById('refresh-btn').addEventListener('click', async function() {
+        try { await refreshAll(); } catch(err) { utils.showMessage('刷新失败', 'error'); }
+    });
+    document.getElementById('export-btn').addEventListener('click', async function() {
+        try { await exportReport(); } catch(err) { utils.showMessage('导出失败', 'error'); }
+    });
     var userEl = document.getElementById('current-user');
     if (userEl) {
-        var users = db.get('users');
+        var users = await db.get('users');
         userEl.textContent = (users.length > 0 ? users[0].name : '管理员');
     }
-    refreshAll();
+    await refreshAll();
 });
 
-function refreshAll() {
-    renderStatsCards();
-    drawRevenueChart();
-    drawCategoryChart();
-    drawTopDishes();
-    drawCostChart();
-    drawSupplierStats();
+async function refreshAll() {
+    await renderStatsCards();
+    await drawRevenueChart();
+    await drawCategoryChart();
+    await drawTopDishes();
+    await drawCostChart();
+    await drawSupplierStats();
 }
 
 function getDateRange() {
@@ -31,15 +36,15 @@ function getDateRange() {
     return { start: start, end: end };
 }
 
-function renderStatsCards() {
+async function renderStatsCards() {
     var range = getDateRange();
     var startStr = utils.formatDate(range.start);
     var endStr = utils.formatDate(range.end);
 
-    var menus = db.get('weekly_menus').filter(function(m) { return m.date >= startStr && m.date <= endStr; });
+    var menus = (await db.get('weekly_menus')).filter(function(m) { return m.date >= startStr && m.date <= endStr; });
     var totalDiners = menus.reduce(function(s, m) { return s + (m.total_diners || 0); }, 0);
 
-    var dishes = db.get('dishes');
+    var dishes = await db.get('dishes');
     var totalSales = 0;
     menus.forEach(function(m) {
         Object.values(m.meals).forEach(function(meal) {
@@ -50,10 +55,10 @@ function renderStatsCards() {
         });
     });
 
-    var orders = db.get('purchase_orders').filter(function(p) { return p.date >= startStr && p.date <= endStr && (p.status === 'paid' || p.status === 'completed'); });
+    var orders = (await db.get('purchase_orders')).filter(function(p) { return p.date >= startStr && p.date <= endStr && (p.status === 'paid' || p.status === 'completed'); });
     var totalCost = orders.reduce(function(s, p) { return s + p.total_amount; }, 0);
 
-    var settlements = db.get('settlements').filter(function(s) { return s.period_start >= startStr && s.period_end <= endStr && s.status === 'paid'; });
+    var settlements = (await db.get('settlements')).filter(function(s) { return s.period_start >= startStr && s.period_end <= endStr && s.status === 'paid'; });
     var totalSettled = settlements.reduce(function(s, st) { return s + st.actual_amount; }, 0);
 
     var profit = totalSales - totalCost;
@@ -70,7 +75,7 @@ function renderStatsCards() {
     }).join('');
 }
 
-function drawRevenueChart() {
+async function drawRevenueChart() {
     var canvas = document.getElementById('revenue-chart');
     if (!canvas) return;
     var ctx = canvas.getContext('2d');
@@ -81,9 +86,9 @@ function drawRevenueChart() {
     var range = getDateRange();
     var startStr = utils.formatDate(range.start);
     var endStr = utils.formatDate(range.end);
-    var menus = db.get('weekly_menus').filter(function(m) { return m.date >= startStr && m.date <= endStr; });
+    var menus = (await db.get('weekly_menus')).filter(function(m) { return m.date >= startStr && m.date <= endStr; });
 
-    var dishes = db.get('dishes');
+    var dishes = await db.get('dishes');
     var dateMap = {};
     menus.forEach(function(m) {
         var revenue = 0;
@@ -135,7 +140,7 @@ function drawRevenueChart() {
     }
 }
 
-function drawCategoryChart() {
+async function drawCategoryChart() {
     var canvas = document.getElementById('category-chart');
     if (!canvas) return;
     var ctx = canvas.getContext('2d');
@@ -143,11 +148,11 @@ function drawCategoryChart() {
     var height = 220;
     canvas.width = width; canvas.height = height;
 
-    var dishes = db.get('dishes');
+    var dishes = await db.get('dishes');
     var range = getDateRange();
     var startStr = utils.formatDate(range.start);
     var endStr = utils.formatDate(range.end);
-    var menus = db.get('weekly_menus').filter(function(m) { return m.date >= startStr && m.date <= endStr; });
+    var menus = (await db.get('weekly_menus')).filter(function(m) { return m.date >= startStr && m.date <= endStr; });
 
     var catCount = {};
     menus.forEach(function(m) {
@@ -195,8 +200,8 @@ function drawCategoryChart() {
     });
 }
 
-function drawTopDishes() {
-    var dishes = db.get('dishes');
+async function drawTopDishes() {
+    var dishes = await db.get('dishes');
     var sorted = dishes.slice().sort(function(a, b) { return (b.sales || 0) - (a.sales || 0); }).slice(0, 10);
     var tbody = document.getElementById('top-dishes');
 
@@ -206,7 +211,7 @@ function drawTopDishes() {
     }).join('');
 }
 
-function drawCostChart() {
+async function drawCostChart() {
     var canvas = document.getElementById('cost-chart');
     if (!canvas) return;
     var ctx = canvas.getContext('2d');
@@ -217,7 +222,7 @@ function drawCostChart() {
     var range = getDateRange();
     var startStr = utils.formatDate(range.start);
     var endStr = utils.formatDate(range.end);
-    var orders = db.get('purchase_orders').filter(function(p) { return p.date >= startStr && p.date <= endStr; });
+    var orders = (await db.get('purchase_orders')).filter(function(p) { return p.date >= startStr && p.date <= endStr; });
 
     var dateMap = {};
     orders.forEach(function(o) {
@@ -258,11 +263,11 @@ function drawCostChart() {
     }
 }
 
-function drawSupplierStats() {
+async function drawSupplierStats() {
     var range = getDateRange();
     var startStr = utils.formatDate(range.start);
     var endStr = utils.formatDate(range.end);
-    var orders = db.get('purchase_orders').filter(function(p) { return p.date >= startStr && p.date <= endStr; });
+    var orders = (await db.get('purchase_orders')).filter(function(p) { return p.date >= startStr && p.date <= endStr; });
 
     var supMap = {};
     orders.forEach(function(o) {
@@ -304,14 +309,14 @@ function drawSupplierStats() {
     });
 }
 
-function exportReport() {
+async function exportReport() {
     var range = getDateRange();
     var data = [];
     data.push({ '指标': '统计周期', '数值': utils.formatDate(range.start) + ' ~ ' + utils.formatDate(range.end) });
 
-    var menus = db.get('weekly_menus').filter(function(m) { return m.date >= utils.formatDate(range.start) && m.date <= utils.formatDate(range.end); });
+    var menus = (await db.get('weekly_menus')).filter(function(m) { return m.date >= utils.formatDate(range.start) && m.date <= utils.formatDate(range.end); });
     var totalDiners = menus.reduce(function(s, m) { return s + (m.total_diners || 0); }, 0);
-    var dishes = db.get('dishes');
+    var dishes = await db.get('dishes');
     var totalSales = 0;
     menus.forEach(function(m) {
         Object.values(m.meals).forEach(function(meal) {
@@ -321,7 +326,7 @@ function exportReport() {
             });
         });
     });
-    var orders = db.get('purchase_orders').filter(function(p) { return p.date >= utils.formatDate(range.start) && p.date <= utils.formatDate(range.end); });
+    var orders = (await db.get('purchase_orders')).filter(function(p) { return p.date >= utils.formatDate(range.start) && p.date <= utils.formatDate(range.end); });
     var totalCost = orders.reduce(function(s, p) { return s + p.total_amount; }, 0);
 
     data.push({ '指标': '就餐总人次', '数值': totalDiners });

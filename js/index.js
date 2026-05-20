@@ -1,34 +1,34 @@
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     loadSidebar('index.html');
-    loadDashboardData();
-    loadWeeklyMenu();
+    await loadDashboardData();
+    await loadWeeklyMenu();
 });
 
-function loadDashboardData() {
-    const purchaseOrders = db.get('purchase_orders');
+async function loadDashboardData() {
+    const purchaseOrders = await db.get('purchase_orders');
     const today = utils.formatDate(new Date());
     const todayPurchase = purchaseOrders
         .filter(p => p.date === today)
         .reduce((sum, p) => sum + p.total_amount, 0);
     document.getElementById('today-purchase').textContent = todayPurchase.toFixed(2);
 
-    const weeklyMenus = db.get('weekly_menus');
+    const weeklyMenus = await db.get('weekly_menus');
     const todayMenu = weeklyMenus.find(m => m.date === today);
     const todayDiners = todayMenu ? todayMenu.total_diners : 0;
     document.getElementById('today-diners').textContent = todayDiners;
 
-    const alertCount = utils.getInventoryAlertCount();
+    const alertCount = await utils.getInventoryAlertCount();
     document.getElementById('inventory-alert').textContent = alertCount;
 
-    const pendingCount = utils.getPendingApprovalCount();
+    const pendingCount = await utils.getPendingApprovalCount();
     document.getElementById('pending-approval').textContent = pendingCount;
     
     const alertEl = document.getElementById('alert-count');
     if (alertEl) alertEl.textContent = alertCount + pendingCount;
 }
 
-function loadWeeklyMenu() {
-    const weeklyMenus = db.get('weekly_menus');
+async function loadWeeklyMenu() {
+    const weeklyMenus = await db.get('weekly_menus');
     const tableBody = document.getElementById('weekly-menu-table');
     
     const today = new Date();

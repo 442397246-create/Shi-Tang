@@ -19,8 +19,26 @@
                 <div class="flex items-center justify-between p-4">
                     <div class="flex items-center"><h2 class="text-lg font-semibold text-gray-800">库存管理</h2><span class="ml-4 text-sm text-gray-500">食材库存、出入库记录与预警</span></div>
                     <div class="flex items-center space-x-4">
-                        <div class="relative"><i class="fas fa-bell text-xl text-gray-500"></i><span class="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-4 h-4 flex items-center justify-center rounded-full" id="alert-count">0</span></div>
-                        <span class="text-sm font-medium text-gray-700" id="current-user">管理员</span>
+                        <div class="relative">
+                            <i class="fas fa-bell text-xl text-gray-500"></i>
+                            <span class="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-4 h-4 flex items-center justify-center rounded-full" id="alert-count">0</span>
+                        </div>
+                        <div class="relative" id="user-dropdown-container">
+                            <button onclick="toggleUserDropdown()" class="flex items-center space-x-2 hover:bg-gray-100 rounded-md py-2 px-3 transition-colors">
+                                <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                                    <i class="fas fa-user text-blue-600"></i>
+                                </div>
+                                <span class="text-sm font-medium text-gray-700" id="current-user">管理员</span>
+                                <i class="fas fa-chevron-down text-xs text-gray-500"></i>
+                            </button>
+                            <div id="user-dropdown" class="absolute right-0 top-full mt-1 w-48 bg-white rounded-md shadow-lg border hidden z-50">
+                                <div class="py-1">
+                                    <button onclick="logout()" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center">
+                                        <i class="fas fa-sign-out-alt mr-2 text-red-500"></i> 退出登录
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </header>
@@ -125,6 +143,7 @@
         </div>
     </div>
 
+    <script src="js/api.js"></script>
     <script src="js/common.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
